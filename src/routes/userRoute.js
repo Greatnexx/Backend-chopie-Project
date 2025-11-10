@@ -1,10 +1,8 @@
 import express from "express"
-import { createUser, loginUser } from "../Controllers/user.js";
 
 const router = express.Router();
 
-router.post("/reg",createUser);
-router.post("/auth",loginUser);
-
+// Customer authentication removed - QR code ordering doesn't require login
+// Only restaurant staff need authentication via /restaurant/login
 
 export default router

@@ -1,9 +1,10 @@
 import nodemailer from 'nodemailer';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
+  service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -13,6 +14,14 @@ const transporter = nodemailer.createTransport({
 // Test email configuration
 const testEmailConfig = async () => {
   try {
+    console.log('EMAIL_USER:', process.env.EMAIL_USER);
+    console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
+    
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.error('Missing email credentials in environment variables');
+      return;
+    }
+    
     await transporter.verify();
     console.log('Email configuration is valid');
   } catch (error) {
@@ -23,35 +32,41 @@ const testEmailConfig = async () => {
 testEmailConfig();
 
 export const sendOrderConfirmationEmail = async (order) => {
-  const itemsList = order.items.map(item => 
-    `${item.name} x${item.quantity} - $${item.totalPrice.toFixed(2)}${item.specialInstructions ? ` (${item.specialInstructions})` : ''}`
-  ).join('\n');
+  try {
+    const itemsList = order.items.map(item => 
+      `${item.name} x${item.quantity} - $${item.totalPrice.toFixed(2)}${item.specialInstructions ? ` (${item.specialInstructions})` : ''}`
+    ).join('\n');
 
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: order.customerEmail,
-    subject: `Order Confirmation - #${order.orderNumber}`,
-    html: `
-      <h2>Order Confirmation</h2>
-      <p>Dear ${order.customerName},</p>
-      <p>Your order has been confirmed! Here are the details:</p>
-      
-      <h3>Order Details:</h3>
-      <p><strong>Order Number:</strong> ${order.orderNumber}</p>
-      <p><strong>Table:</strong> ${order.tableNumber}</p>
-      <p><strong>Total:</strong> $${order.totalAmount.toFixed(2)}</p>
-      
-      <h3>Items:</h3>
-      <pre>${itemsList}</pre>
-      
-      <p>Track your order at: <a href="${process.env.FRONTEND_URL}/trackorder">Track Order</a></p>
-      <p>Estimated preparation time: 20-25 minutes</p>
-      
-      <p>Thank you for choosing Chopie!</p>
-    `,
-  };
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: order.customerEmail,
+      subject: `Order Confirmation - #${order.orderNumber}`,
+      html: `
+        <h2>Order Confirmation</h2>
+        <p>Dear ${order.customerName},</p>
+        <p>Your order has been confirmed! Here are the details:</p>
+        
+        <h3>Order Details:</h3>
+        <p><strong>Order Number:</strong> ${order.orderNumber}</p>
+        <p><strong>Table:</strong> ${order.tableNumber}</p>
+        <p><strong>Total:</strong> $${order.totalAmount.toFixed(2)}</p>
+        
+        <h3>Items:</h3>
+        <pre>${itemsList}</pre>
+        
+        <p>Track your order at: <a href="${process.env.FRONTEND_URL}/trackorder">Track Order</a></p>
+        <p>Estimated preparation time: 20-25 minutes</p>
+        
+        <p>Thank you for choosing Chopie!</p>
+      `,
+    };
 
-  await transporter.sendMail(mailOptions);
+    await transporter.sendMail(mailOptions);
+    console.log('Order confirmation email sent successfully');
+  } catch (error) {
+    console.error('Email sending failed:', error);
+    // Don't throw error to prevent order creation from failing
+  }
 };
 
 export const sendUserCredentialsEmail = async (user) => {

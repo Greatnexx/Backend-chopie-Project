@@ -39,7 +39,12 @@ const seedUsers = async () => {
       }
     ];
     
-    await RestaurantUser.insertMany(users);
+    // Create users one by one to trigger password hashing
+    for (const userData of users) {
+      const user = new RestaurantUser(userData);
+      await user.save();
+    }
+    
     console.log("Restaurant users seeded successfully!");
     console.log("Login credentials:");
     users.forEach(user => {
