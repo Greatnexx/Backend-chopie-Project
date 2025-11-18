@@ -44,6 +44,19 @@ const updateOrder = async (req, res) => {
   }
 };
 
+// Handle preflight OPTIONS request
+router.options('/order', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.sendStatus(200);
+});
+
+// Test endpoint
+router.get('/order/test', (req, res) => {
+  res.json({ status: true, message: 'Order API is working', timestamp: new Date() });
+});
+
 router.post('/order', createOrder);
 router.get('/order', getAllOrders);
 // router.patch('/order/:orderId', updateOrder);

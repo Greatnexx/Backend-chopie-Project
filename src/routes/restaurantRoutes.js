@@ -1,5 +1,5 @@
 import express from 'express';
-import { loginRestaurantUser, createRestaurantUser, getAllUsers, toggleUserStatus, awardStar, getAnalytics, getAuditLogs, searchOrders, changePassword, toggleMenuAvailability, getAllMenuItems } from '../Controllers/restaurantAuth.js';
+import { loginRestaurantUser, createRestaurantUser, getAllUsers, toggleUserStatus, awardStar, getAnalytics, getAuditLogs, searchOrders, changePassword, toggleMenuAvailability, getAllMenuItems, deleteUser } from '../Controllers/restaurantAuth.js';
 import { acceptOrder, rejectOrder, updateOrderStatus, getAllOrders, getOrderById } from '../Controllers/order.js';
 import { protect, authorize } from '../middlewares/restaurantAuth.js';
 
@@ -11,6 +11,7 @@ router.post('/users', protect, authorize('SuperAdmin'), createRestaurantUser);
 router.get('/users', protect, authorize('SuperAdmin'), getAllUsers);
 router.patch('/users/:userId/status', protect, authorize('SuperAdmin'), toggleUserStatus);
 router.patch('/users/:userId/star', protect, authorize('SuperAdmin', 'TransactionAdmin'), awardStar);
+router.delete('/users/:userId', protect, authorize('SuperAdmin'), deleteUser);
 router.get('/analytics', protect, authorize('SuperAdmin', 'TransactionAdmin'), getAnalytics);
 router.get('/audit', protect, authorize('SuperAdmin', 'TransactionAdmin'), getAuditLogs);
 router.get('/orders/search', protect, searchOrders);

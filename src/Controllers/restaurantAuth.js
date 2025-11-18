@@ -1,6 +1,7 @@
 import RestaurantUser from "../models/restaurantUserModel.js";
 import AuditLog from "../models/auditLogModel.js";
 import jwt from "jsonwebtoken";
+import { sendUserCredentialsEmail } from "../utils/emailService.js";
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "30d" });
@@ -68,17 +69,16 @@ export const createRestaurantUser = async (req, res) => {
     const user = await RestaurantUser.create({ name, email, password: generatedPassword, role });
     await logAction(req.user._id, "CREATE_USER", `Created user: ${email}`, ipAddress);
 
-    // Skip email sending for now due to configuration issues
-    console.log('=== USER CREATION DETAILS ===');
-    console.log('Created by:', req.user.name, '(', req.user.email, ')');
-    console.log('New user details:');
-    console.log('  Name:', name);
-    console.log('  Email:', email);
-    console.log('  Password:', generatedPassword);
-    console.log('  Role:', role);
-    console.log('  User ID:', user._id);
-    console.log('  Created at:', new Date().toISOString());
-    console.log('=============================');
+    // Send credentials via email
+    try {
+      await sendUserCredentialsEmail({ name, email, password: generatedPassword, role });
+      console.log(`✅ Credentials sent to ${email}`);
+    } catch (emailError) {
+      console.log(`❌ Email failed for ${email}:`, emailError.message);
+      console.log('=== USER CREATION DETAILS ===');
+      console.log('Password:', generatedPassword);
+      console.log('=============================');
+    }
 
     res.status(201).json({
       status: true,
@@ -325,6 +325,29 @@ export const getAllMenuItems = async (req, res) => {
     const Menu = (await import("../models/menuModel.js")).default;
     const menus = await Menu.find({}).populate("category", "name");
     res.json({ status: true, data: menus });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+export const deleteUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const ipAddress = req.ip;
+
+    const user = await RestaurantUser.findById(userId);
+    if (!user) {
+      return res.status(404).json({ status: false, message: "User not found" });
+    }
+
+    if (user.role === "SuperAdmin") {
+      return res.status(400).json({ status: false, message: "Cannot delete SuperAdmin" });
+    }
+
+    await RestaurantUser.findByIdAndDelete(userId);
+    await logAction(req.user._id, "DELETE_USER", `Deleted user: ${user.email}`, ipAddress);
+
+    res.json({ status: true, message: "User deleted successfully" });
   } catch (error) {
     res.status(500).json({ status: false, message: error.message });
   }

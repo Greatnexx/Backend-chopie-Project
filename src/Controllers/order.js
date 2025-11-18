@@ -1,60 +1,34 @@
 import Order from "../models/orderModel.js";
-import shortid from "shortid";
+import { generateOrderNumber } from "../utils/orderNumberGenerator.js";
 import { sendOrderConfirmationEmail } from "../utils/emailService.js";
 import AuditLog from "../models/auditLogModel.js";
 import RejectedOrder from "../models/rejectedOrderModel.js";
 import { io } from "../../app.js";
 
 export const createOrder = async (req, res) => {
+  console.log('Order creation started:', new Date().toISOString());
   try {
-    const { tableNumber, customerName, customerEmail, customerPhone, items, totalAmount, confirmDuplicate } =
-      req.body;
+    const { tableNumber, customerName, customerEmail, customerPhone, items, totalAmount } = req.body;
+    console.log('Request data received:', { tableNumber, customerName, customerEmail, itemsCount: items?.length, totalAmount });
 
-    // Validate required fields
+    // Basic validation
     if (!tableNumber || !customerName || !customerEmail || !items || !totalAmount) {
-      return res.status(400).json({
-        status: false,
-        message: "Missing required fields",
-      });
+      console.log('Validation failed: Missing required fields');
+      return res.status(400).json({ status: false, message: "Missing required fields" });
     }
 
-    // Validate items array
     if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({
-        status: false,
-        message: "Items array is required and cannot be empty",
-      });
+      console.log('Validation failed: Invalid items array');
+      return res.status(400).json({ status: false, message: "Items array is required" });
     }
 
-    // Check for duplicate orders (within last 30 minutes)
-    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
-    const existingOrder = await Order.findOne({
-      customerEmail,
-      totalAmount,
-      createdAt: { $gte: thirtyMinutesAgo },
-      status: { $in: ["pending", "Preparing"] }
-    });
-
-    if (existingOrder && !confirmDuplicate) {
-      // Check if cart items match
-      const existingItems = existingOrder.items.map(item => `${item.name}-${item.quantity}-${item.specialInstructions || ''}`);
-      const newItems = items.map(item => `${item.name}-${item.quantity}-${item.specialInstructions || ''}`);
-      
-      if (existingItems.length === newItems.length && existingItems.every(item => newItems.includes(item))) {
-        return res.status(409).json({
-          status: false,
-          isDuplicate: true,
-          message: "Duplicate order detected",
-          existingOrder: {
-            orderNumber: existingOrder.orderNumber,
-            createdAt: existingOrder.createdAt
-          }
-        });
-      }
-    }
-
+    console.log('Generating order number...');
+    const orderNumber = await generateOrderNumber();
+    console.log('Order number generated:', orderNumber);
+    
+    console.log('Creating order in database...');
     const order = await Order.create({
-      orderNumber: shortid.generate(),
+      orderNumber,
       tableNumber,
       customerName,
       customerEmail,
@@ -62,29 +36,17 @@ export const createOrder = async (req, res) => {
       items,
       totalAmount,
     });
+    console.log('Order created successfully:', order._id);
 
-    // Send confirmation email
-    try {
-      await sendOrderConfirmationEmail(order);
-    } catch (emailError) {
-      console.error('Email sending failed:', emailError);
-    }
-
-    // Emit real-time notification
-    io.emit('newOrder', {
-      orderId: order._id,
-      orderNumber: order.orderNumber,
-      customerName: order.customerName,
-      totalAmount: order.totalAmount,
-      tableNumber: order.tableNumber,
-    });
-
+    console.log('Sending response...');
     res.status(201).json({
       status: true,
       message: "Order created successfully",
       data: order,
     });
+    console.log('Response sent successfully');
   } catch (error) {
+    console.error('Order creation error:', error);
     res.status(500).json({
       status: false,
       message: "Failed to create order",

@@ -73,11 +73,16 @@ export const getMenus = async (req, res) => {
     //   });
     // }
 
-    // Build filter object
+    // Build filter object - only show available items by default for customers
     // const filter = { user: user_id };
     const filter = {};
     if (category) filter.category = category;
-    if (available !== undefined) filter.available = available === "true";
+    if (available !== undefined) {
+      filter.available = available === "true";
+    } else {
+      // Default to only available items for customer-facing requests
+      filter.available = true;
+    }
 
     // Build sort object
     let sortObject = {};
@@ -237,47 +242,35 @@ export const updateMenu = async (req, res) => {
 //   }
 // };
 
-// export const toggleMenuAvailability = async (req, res) => {
-//   try {
-//     const user_id = req.user._id;
+export const toggleMenuAvailability = async (req, res) => {
+  try {
+    const menu = await Menu.findById(req.params.id);
 
-//     if (!user_id) {
-//       return res.status(401).json({
-//         success: false,
-//         message: "UnAuthorized",
-//       });
-//     }
+    if (!menu) {
+      return res.status(404).json({
+        success: false,
+        message: "Menu not found",
+      });
+    }
 
-//     const menu = await Menu.findOne({
-//       _id: req.params.id,
-//       user: user_id,
-//     });
+    menu.available = !menu.available;
+    await menu.save();
 
-//     if (!menu) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Menu not found",
-//       });
-//     }
+    await menu.populate("category");
 
-//     menu.available = !menu.available;
-//     await menu.save();
-
-//     await menu.populate("category");
-
-//     res.status(200).json({
-//       success: true,
-//       message: `Menu ${menu.available ? "enabled" : "disabled"} successfully`,
-//       data: menu,
-//     });
-//   } catch (error) {
-//     res.status(500).json({
-//       success: false,
-//       message: "Error toggling menu availability",
-//       error: error.message,
-//     });
-//   }
-// };
+    res.status(200).json({
+      success: true,
+      message: `Menu ${menu.available ? "enabled" : "disabled"} successfully`,
+      data: menu,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error toggling menu availability",
+      error: error.message,
+    });
+  }
+};
 
 // Get menus by category
 export const getMenusByCategory = async (req, res) => {
@@ -304,9 +297,14 @@ export const getMenusByCategory = async (req, res) => {
       });
     }
 
-    // Build filter
+    // Build filter - only show available items by default for customers
     const filter = { category: categoryId };
-    if (available !== undefined) filter.available = available === "true";
+    if (available !== undefined) {
+      filter.available = available === "true";
+    } else {
+      // Default to only available items for customer-facing requests
+      filter.available = true;
+    }
 
     // Calculate pagination
     const skip = (page - 1) * limit;
@@ -337,6 +335,59 @@ export const getMenusByCategory = async (req, res) => {
     res.status(500).json({
       status: false,
       message: "Error fetching menus by category",
+      error: error.message,
+    });
+  }
+};
+
+// Get all menus for restaurant management (including unavailable items)
+export const getAllMenusForManagement = async (req, res) => {
+  try {
+    const {
+      category,
+      available,
+      page = 1,
+      limit = 10,
+      sort = "name",
+    } = req.query;
+
+    // Build filter object - no default availability filter for management
+    const filter = {};
+    if (category) filter.category = category;
+    if (available !== undefined) filter.available = available === "true";
+
+    // Build sort object
+    let sortObject = {};
+    if (sort === "price") sortObject.price = 1;
+    else if (sort === "-price") sortObject.price = -1;
+    else if (sort === "name") sortObject.name = 1;
+    else if (sort === "-name") sortObject.name = -1;
+    else if (sort === "createdAt") sortObject.createdAt = -1;
+    else sortObject.name = 1;
+
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+
+    const menus = await Menu.find(filter)
+      .populate("category")
+      .sort(sortObject)
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Menu.countDocuments(filter);
+
+    res.status(200).json({
+      success: true,
+      data: menus,
+      count: menus.length,
+      total,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(total / limit),
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: false,
+      message: "Error fetching menus for management",
       error: error.message,
     });
   }
