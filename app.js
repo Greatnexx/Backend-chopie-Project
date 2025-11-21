@@ -13,9 +13,21 @@ import orderRoutes from "./src/routes/orderRoute.js";
 import restaurantRoutes from "./src/routes/restaurantRoutes.js";
 import chatRoutes from "./src/routes/chatRoutes.js";
 import ChatHub from "./src/utils/chatHub.js";
-
+import { testEmailConfiguration } from "./src/utils/emailService.js";
 dotenv.config({ quiet: true });
 connectDB();
+
+// Test email configuration on startup
+(async () => {
+  console.log('🔧 Testing email configuration...');
+  const emailWorking = await testEmailConfiguration();
+  if (emailWorking) {
+    console.log('✅ Email service is ready for order confirmations');
+  } else {
+    console.log('❌ Email service failed - order confirmations will not be sent');
+    console.log('💡 Check your EMAIL_USER and EMAIL_PASS environment variables');
+  }
+})();
 
 const app = express();
 const server = createServer(app);
@@ -53,6 +65,44 @@ app.use("/api/v1/chat", (req, res, next) => {
 
 app.get("/test", (req, res) => {
   res.send("Server is working Bro");
+});
+
+app.get("/test-email", async (req, res) => {
+  try {
+    const { testEmailConfiguration } = await import("./src/utils/emailService.js");
+    const isWorking = await testEmailConfiguration();
+    res.json({ 
+      status: isWorking, 
+      message: isWorking ? "Email service is working" : "Email service failed"
+    });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
+});
+
+app.post("/test-send-email", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ status: false, message: "Email address required" });
+    }
+    
+    const { sendOrderConfirmationEmail } = await import("./src/utils/emailService.js");
+    const result = await sendOrderConfirmationEmail(email, "Test User", {
+      orderNumber: "TEST-001",
+      tableNumber: "5",
+      items: [{ name: "Test Pizza", quantity: 1, totalPrice: 15.99 }],
+      totalAmount: 15.99
+    });
+    
+    res.json({ 
+      status: result.success, 
+      message: result.success ? "Test email sent successfully" : "Test email failed",
+      error: result.error || null
+    });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
 });
 
 io.on('connection', (socket) => {

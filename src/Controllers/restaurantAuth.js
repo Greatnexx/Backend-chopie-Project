@@ -3,6 +3,7 @@ import AuditLog from "../models/auditLogModel.js";
 import jwt from "jsonwebtoken";
 import { sendUserCredentialsEmail } from "../utils/emailService.js";
 
+
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "30d" });
 };
@@ -63,21 +64,17 @@ export const createRestaurantUser = async (req, res) => {
       });
     }
 
-    // Generate random password
     const generatedPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
     
     const user = await RestaurantUser.create({ name, email, password: generatedPassword, role });
     await logAction(req.user._id, "CREATE_USER", `Created user: ${email}`, ipAddress);
 
-    // Send credentials via email
+    // Send credentials via email immediately
     try {
       await sendUserCredentialsEmail({ name, email, password: generatedPassword, role });
-      console.log(`✅ Credentials sent to ${email}`);
-    } catch (emailError) {
-      console.log(`❌ Email failed for ${email}:`, emailError.message);
-      console.log('=== USER CREATION DETAILS ===');
-      console.log('Password:', generatedPassword);
-      console.log('=============================');
+      console.log(`Credentials email processed for ${email}`);
+    } catch (error) {
+      console.log(`Credentials email error for ${email}:`, error.message);
     }
 
     res.status(201).json({

@@ -1,6 +1,6 @@
 import Order from "../models/orderModel.js";
 import { generateOrderNumber } from "../utils/orderNumberGenerator.js";
-import { sendOrderConfirmationEmail } from "../utils/emailService.js";
+import { sendOrderConfirmationEmail, sendOrderStatusUpdateEmail } from "../utils/emailService.js";
 import AuditLog from "../models/auditLogModel.js";
 import RejectedOrder from "../models/rejectedOrderModel.js";
 import { io } from "../../app.js";
@@ -38,11 +38,30 @@ export const createOrder = async (req, res) => {
     });
     console.log('Order created successfully:', order._id);
 
+    // Send order confirmation email immediately
+    let emailStatus = { success: false, message: 'Email not attempted' };
+    try {
+      emailStatus = await sendOrderConfirmationEmail(customerEmail, customerName, {
+        orderNumber,
+        tableNumber,
+        items,
+        totalAmount
+      });
+      console.log('Order confirmation email result:', emailStatus);
+    } catch (error) {
+      console.log('Order confirmation email error:', error.message);
+      emailStatus = { success: false, error: error.message };
+    }
+
     console.log('Sending response...');
     res.status(201).json({
       status: true,
-      message: "Order created successfully",
+      message: emailStatus.success 
+        ? "Order placed successfully! Confirmation email sent to your inbox." 
+        : "Order placed successfully! Email notification may be delayed.",
       data: order,
+      emailSent: emailStatus.success,
+      emailError: emailStatus.success ? null : emailStatus.error
     });
     console.log('Response sent successfully');
   } catch (error) {
@@ -195,6 +214,16 @@ export const updateOrderStatus = async (req, res) => {
       { status: nextStatus },
       { new: true }
     );
+
+    // Send order status update email
+    let emailStatus = { success: false, message: 'Email not attempted' };
+    try {
+      emailStatus = await sendOrderStatusUpdateEmail(order, nextStatus.toLowerCase());
+      console.log(`Order status update email result for ${order.orderNumber}:`, emailStatus);
+    } catch (error) {
+      console.log(`Order status update email error for ${order.orderNumber}:`, error.message);
+      emailStatus = { success: false, error: error.message };
+    }
 
     await AuditLog.create({
       userId,
