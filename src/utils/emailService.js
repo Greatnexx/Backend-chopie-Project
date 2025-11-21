@@ -63,11 +63,19 @@ const processEmailQueue = async () => {
 
 const sendEmailImmediate = async (mailOptions, retries = 3) => {
   try {
-    await transporter.sendMail(mailOptions);
+    // Add timeout for Render environment
+    const emailPromise = transporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Email timeout')), 10000)
+    );
+    
+    await Promise.race([emailPromise, timeoutPromise]);
     return true;
   } catch (error) {
-    emailQueue.push({ mailOptions, retries });
-    setTimeout(processEmailQueue, 1000);
+    if (retries > 0) {
+      emailQueue.push({ mailOptions, retries: retries - 1 });
+      setTimeout(processEmailQueue, 2000);
+    }
     throw error;
   }
 };

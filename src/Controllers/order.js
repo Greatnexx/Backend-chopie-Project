@@ -62,30 +62,30 @@ export const createOrder = async (req, res) => {
     });
     console.log('Order created successfully:', order._id);
 
-    // Send order confirmation email immediately
+    // Send order confirmation email (non-blocking)
     let emailStatus = { success: false, message: 'Email not attempted' };
-    try {
-      emailStatus = await sendOrderConfirmationEmail(customerEmail, customerName, {
-        orderNumber,
-        tableNumber,
-        items,
-        totalAmount
-      });
-      console.log('Order confirmation email result:', emailStatus);
-    } catch (error) {
-      console.log('Order confirmation email error:', error.message);
-      emailStatus = { success: false, error: error.message };
-    }
+    setImmediate(async () => {
+      try {
+        emailStatus = await sendOrderConfirmationEmail(customerEmail, customerName, {
+          orderNumber,
+          tableNumber,
+          items,
+          totalAmount
+        });
+        console.log('Order confirmation email result:', emailStatus);
+      } catch (error) {
+        console.log('Order confirmation email error:', error.message);
+      }
+    });
 
     console.log('Sending response...');
     res.status(201).json({
       status: true,
-      message: emailStatus.success 
-        ? "Order placed successfully! Confirmation email sent to your inbox." 
-        : "Order placed successfully! Email notification may be delayed.",
+      message: "Order placed successfully! Email confirmation is being processed.",
       data: order,
-      emailSent: emailStatus.success,
-      emailError: emailStatus.success ? null : emailStatus.error
+      orderNumber: orderNumber,
+      emailSent: false, // Will be processed in background
+      emailError: null
     });
     console.log('Response sent successfully');
   } catch (error) {
