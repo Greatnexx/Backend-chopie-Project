@@ -8,8 +8,8 @@ import { io } from "../../app.js";
 export const createOrder = async (req, res) => {
   console.log('Order creation started:', new Date().toISOString());
   try {
-    const { tableNumber, customerName, customerEmail, customerPhone, items, totalAmount } = req.body;
-    console.log('Request data received:', { tableNumber, customerName, customerEmail, itemsCount: items?.length, totalAmount });
+    const { tableNumber, customerName, customerEmail, customerPhone, items, totalAmount, confirmDuplicate } = req.body;
+    console.log('Request data received:', { tableNumber, customerName, customerEmail, itemsCount: items?.length, totalAmount, confirmDuplicate });
 
     // Basic validation
     if (!tableNumber || !customerName || !customerEmail || !items || !totalAmount) {
@@ -20,6 +20,30 @@ export const createOrder = async (req, res) => {
     if (!Array.isArray(items) || items.length === 0) {
       console.log('Validation failed: Invalid items array');
       return res.status(400).json({ status: false, message: "Items array is required" });
+    }
+
+    // Check for duplicate orders (within last 5 minutes)
+    if (!confirmDuplicate) {
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      const existingOrder = await Order.findOne({
+        customerEmail,
+        tableNumber,
+        totalAmount,
+        createdAt: { $gte: fiveMinutesAgo }
+      });
+      
+      if (existingOrder) {
+        console.log('Duplicate order detected:', existingOrder.orderNumber);
+        return res.status(409).json({
+          status: false,
+          message: "Duplicate order detected",
+          isDuplicate: true,
+          existingOrder: {
+            orderNumber: existingOrder.orderNumber,
+            createdAt: existingOrder.createdAt
+          }
+        });
+      }
     }
 
     console.log('Generating order number...');
