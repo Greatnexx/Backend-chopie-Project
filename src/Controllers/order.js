@@ -61,21 +61,27 @@ export const createOrder = async (req, res) => {
       totalAmount,
     });
     console.log('Order created successfully:', order._id);
-     await sendOrderConfirmationEmail(customerEmail, customerName, {
-        orderNumber,
-        tableNumber,
-        items,
-        totalAmount
-      });
 
-     res.status(201).json({
+    // Send response immediately to prevent timeout
+    res.status(201).json({
       status: true,
-      message: "Success" 
-        ? "Order placed successfully! Confirmation email sent to your inbox." 
-        : "Order placed successfully! Email notification may be delayed.",
-      data: order,
-      // emailSent: emailStatus.success,
-      // emailError: emailStatus.success ? null : emailStatus.error
+      message: "Order placed successfully! Confirmation email will be sent shortly.",
+      data: order
+    });
+
+    // Send email asynchronously (fire-and-forget)
+    setImmediate(async () => {
+      try {
+        await sendOrderConfirmationEmail(customerEmail, customerName, {
+          orderNumber,
+          tableNumber,
+          items,
+          totalAmount
+        });
+        console.log(`✅ Order confirmation email sent for ${orderNumber}`);
+      } catch (error) {
+        console.log(`❌ Order confirmation email failed for ${orderNumber}:`, error.message);
+      }
     });
 
     // Send order confirmation email immediately

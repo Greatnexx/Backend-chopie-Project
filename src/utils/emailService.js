@@ -11,9 +11,13 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS,
   },
   // pool: true, // Use connection pooling
-  maxConnections: 50, // Limit concurrent connections
-  maxMessages: 1000, // Limit messages per connection
-  rateLimit: 140, // Limit to 14 messages per second
+  pool: true,
+  maxConnections: 5,
+  maxMessages: 100,
+  rateLimit: 14,
+  connectionTimeout: 10000,
+  greetingTimeout: 5000,
+  socketTimeout: 15000
   // secure: true, // Use TLS
   tls: {
     rejectUnauthorized: false
