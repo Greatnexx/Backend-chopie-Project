@@ -14,7 +14,7 @@ const transporter = nodemailer.createTransport({
   maxConnections: 5, // Limit concurrent connections
   maxMessages: 100, // Limit messages per connection
   rateLimit: 14, // Limit to 14 messages per second
-  secure: true, // Use TLS
+  // secure: true, // Use TLS
   tls: {
     rejectUnauthorized: false
   }
