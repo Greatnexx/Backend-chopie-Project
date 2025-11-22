@@ -13,21 +13,21 @@ import orderRoutes from "./src/routes/orderRoute.js";
 import restaurantRoutes from "./src/routes/restaurantRoutes.js";
 import chatRoutes from "./src/routes/chatRoutes.js";
 import ChatHub from "./src/utils/chatHub.js";
-import { testEmailConfiguration } from "./src/utils/emailService.js";
+// import { testEmailConfiguration } from "./src/utils/emailService.js";
 dotenv.config({ quiet: true });
 connectDB();
 
 // Test email configuration on startup
-(async () => {
-  console.log('🔧 Testing email configuration...');
-  const emailWorking = await testEmailConfiguration();
-  if (emailWorking) {
-    console.log('✅ Email service is ready for order confirmations');
-  } else {
-    console.log('❌ Email service failed - order confirmations will not be sent');
-    console.log('💡 Check your EMAIL_USER and EMAIL_PASS environment variables');
-  }
-})();
+// (async () => {
+//   console.log('🔧 Testing email configuration...');
+//   const emailWorking = await testEmailConfiguration();
+//   if (emailWorking) {
+//     console.log('✅ Email service is ready for order confirmations');
+//   } else {
+//     console.log('❌ Email service failed - order confirmations will not be sent');
+//     console.log('💡 Check your EMAIL_USER and EMAIL_PASS environment variables');
+//   }
+// })();
 
 const app = express();
 const server = createServer(app);
@@ -67,18 +67,18 @@ app.get("/test", (req, res) => {
   res.send("Server is working Bro");
 });
 
-app.get("/test-email", async (req, res) => {
-  try {
-    const { testEmailConfiguration } = await import("./src/utils/emailService.js");
-    const isWorking = await testEmailConfiguration();
-    res.json({ 
-      status: isWorking, 
-      message: isWorking ? "Email service is working" : "Email service failed"
-    });
-  } catch (error) {
-    res.status(500).json({ status: false, message: error.message });
-  }
-});
+// app.get("/test-email", async (req, res) => {
+//   try {
+//     const { testEmailConfiguration } = await import("./src/utils/emailService.js");
+//     const isWorking = await testEmailConfiguration();
+//     res.json({ 
+//       status: isWorking, 
+//       message: isWorking ? "Email service is working" : "Email service failed"
+//     });
+//   } catch (error) {
+//     res.status(500).json({ status: false, message: error.message });
+//   }
+// });
 
 // app.post("/test-send-email", async (req, res) => {
 //   try {
