@@ -33,7 +33,7 @@ const app = express();
 const server = createServer(app);
 export const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: process.env.FRONTEND_URL || "https://chopie-resturant-frontend.vercel.app",
     methods: ["GET", "POST"]
   }
 });
@@ -44,7 +44,7 @@ export { chatHub };
 const PORT = process.env.PORT || 8000;
 
 app.use(cors({
-  origin: [process.env.FRONTEND_URL || "http://localhost:3000", "http://localhost:5173", "https://eatery-frontend-chopie.vercel.app"],
+  origin: [process.env.FRONTEND_URL || "https://chopie-resturant-frontend.vercel.app", "https://eatery-frontend-chopie.vercel.app"],
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
