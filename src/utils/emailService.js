@@ -24,20 +24,20 @@ const transporter = nodemailer.createTransport({
 const emailQueue = [];
 let isProcessingQueue = false;
 
-// export const testEmailConfiguration = async () => {
-//   try {
-//     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-//       throw new Error('EMAIL_USER or EMAIL_PASS environment variables not set');
-//     }
+export const testEmailConfiguration = async () => {
+  try {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      throw new Error('EMAIL_USER or EMAIL_PASS environment variables not set');
+    }
     
-//     await transporter.verify();
-//     console.log('✅ Email service configured successfully');
-//     return true;
-//   } catch (error) {
-//     console.error('❌ Email configuration failed:', error.message);
-//     return false;
-//   }
-// };
+    await transporter.verify();
+    console.log('✅ Email service configured successfully');
+    return true;
+  } catch (error) {
+    console.error('❌ Email configuration failed:', error.message);
+    return false;
+  }
+};
 
 const processEmailQueue = async () => {
   if (isProcessingQueue || emailQueue.length === 0) return;
