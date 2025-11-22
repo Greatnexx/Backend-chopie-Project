@@ -80,30 +80,30 @@ app.get("/test-email", async (req, res) => {
   }
 });
 
-app.post("/test-send-email", async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ status: false, message: "Email address required" });
-    }
+// app.post("/test-send-email", async (req, res) => {
+//   try {
+//     const { email } = req.body;
+//     if (!email) {
+//       return res.status(400).json({ status: false, message: "Email address required" });
+//     }
     
-    const { sendOrderConfirmationEmail } = await import("./src/utils/emailService.js");
-    const result = await sendOrderConfirmationEmail(email, "Test User", {
-      orderNumber: "TEST-001",
-      tableNumber: "5",
-      items: [{ name: "Test Pizza", quantity: 1, totalPrice: 15.99 }],
-      totalAmount: 15.99
-    });
+//     const { sendOrderConfirmationEmail } = await import("./src/utils/emailService.js");
+//     const result = await sendOrderConfirmationEmail(email, "Test User", {
+//       orderNumber: "TEST-001",
+//       tableNumber: "5",
+//       items: [{ name: "Test Pizza", quantity: 1, totalPrice: 15.99 }],
+//       totalAmount: 15.99
+//     });
     
-    res.json({ 
-      status: result.success, 
-      message: result.success ? "Test email sent successfully" : "Test email failed",
-      error: result.error || null
-    });
-  } catch (error) {
-    res.status(500).json({ status: false, message: error.message });
-  }
-});
+//     res.json({ 
+//       status: result.success, 
+//       message: result.success ? "Test email sent successfully" : "Test email failed",
+//       error: result.error || null
+//     });
+//   } catch (error) {
+//     res.status(500).json({ status: false, message: error.message });
+//   }
+// });
 
 io.on('connection', (socket) => {
   chatHub.handleConnection(socket);
