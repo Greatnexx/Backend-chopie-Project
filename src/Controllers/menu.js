@@ -279,12 +279,13 @@ export const getMenusByCategory = async (req, res) => {
     const { categoryId } = req.params;
     const { available, page = 1, limit = 10 } = req.query;
 
-    // if (!user_id) {
-    //   return res.status(401).json({
-    //     status: false,
-    //     message: "UnAuthorized",
-    //   });
-    // }
+    // Validate categoryId
+    if (!categoryId || categoryId === 'undefined' || categoryId === 'null') {
+      return res.status(400).json({
+        status: false,
+        message: "Valid category ID is required",
+      });
+    }
 
     // Validate category exists and belongs to user
     const category = await Category.findOne({

@@ -36,9 +36,11 @@ export const loginRestaurantUser = async (req, res) => {
       status: true,
       data: {
         _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
+        name: user.name || '',
+        email: user.email || '',
+        role: user.role || '',
+        isActive: user.isActive !== undefined ? user.isActive : true,
+        stars: user.stars || 0,
         token,
       },
     });
@@ -98,13 +100,25 @@ export const createRestaurantUser = async (req, res) => {
 
 export const getAllUsers = async (req, res) => {
   try {
-    console.log('getAllUsers called by user:', req.user?.email, 'role:', req.user?.role);
+    if (!req.user) {
+      return res.status(401).json({ status: false, message: "Authentication required" });
+    }
+    
     const users = await RestaurantUser.find({}).select("-password");
-    console.log('Found users:', users.length);
-    console.log('Users data:', users.map(u => ({ name: u.name, email: u.email, role: u.role })));
-    res.json({ status: true, data: users });
+    
+    const sanitizedUsers = users.map(user => ({
+      _id: user._id,
+      name: user.name || '',
+      email: user.email || '',
+      role: user.role || '',
+      isActive: user.isActive !== undefined ? user.isActive : true,
+      stars: user.stars || 0,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    }));
+    
+    res.json({ status: true, data: sanitizedUsers });
   } catch (error) {
-    console.error('getAllUsers error:', error);
     res.status(500).json({ status: false, message: error.message });
   }
 };
@@ -205,13 +219,13 @@ export const getAnalytics = async (req, res) => {
     res.json({
       status: true,
       data: {
-        totalRevenue,
-        totalOrders: orders.length,
-        completedOrders: completedOrders.length,
-        delayedOrders: delayedOrders.length,
-        fastOrders: fastOrders.length,
-        avgOrderTime,
-        period
+        totalRevenue: totalRevenue || 0,
+        totalOrders: orders?.length || 0,
+        completedOrders: completedOrders?.length || 0,
+        delayedOrders: delayedOrders?.length || 0,
+        fastOrders: fastOrders?.length || 0,
+        avgOrderTime: avgOrderTime || 0,
+        period: period || 'day'
       }
     });
   } catch (error) {

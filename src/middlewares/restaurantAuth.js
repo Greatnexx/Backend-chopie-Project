@@ -19,16 +19,24 @@ export const protect = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = await RestaurantUser.findById(decoded.id).select("-password");
+    const user = await RestaurantUser.findById(decoded.id).select("-password");
 
-    console.log('Decoded user:', req.user?.email, 'Active:', req.user?.isActive);
-
-    if (!req.user || !req.user.isActive) {
+    if (!user || !user.isActive) {
       return res.status(401).json({
         status: false,
         message: "Not authorized, user not found",
       });
     }
+
+    // Ensure all required fields exist
+    req.user = {
+      _id: user._id,
+      name: user.name || '',
+      email: user.email || '',
+      role: user.role || 'SubUser',
+      isActive: user.isActive !== undefined ? user.isActive : true,
+      stars: user.stars || 0
+    };
 
     next();
   } catch (error) {
@@ -42,7 +50,7 @@ export const protect = async (req, res, next) => {
 
 export const authorize = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    if (!req.user || !req.user.role || !roles.includes(req.user.role)) {
       return res.status(403).json({
         status: false,
         message: "Access denied",

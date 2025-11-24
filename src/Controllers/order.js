@@ -1,6 +1,5 @@
 import Order from "../models/orderModel.js";
 import { generateOrderNumber } from "../utils/orderNumberGenerator.js";
-import { sendOrderConfirmationEmail, sendOrderStatusUpdateEmail } from "../utils/emailService.js";
 import AuditLog from "../models/auditLogModel.js";
 import RejectedOrder from "../models/rejectedOrderModel.js";
 import { io } from "../../app.js";
@@ -62,45 +61,25 @@ export const createOrder = async (req, res) => {
     });
     console.log('Order created successfully:', order._id);
 
-    // Send response immediately to prevent timeout
+    // Send response with order details for modal display
     res.status(201).json({
       status: true,
-      message: "Order placed successfully! Confirmation email will be sent shortly.",
-      data: order
-    });
-
-    // Send email asynchronously (fire-and-forget)
-    setImmediate(async () => {
-      try {
-        await sendOrderConfirmationEmail(customerEmail, customerName, {
-          orderNumber,
-          tableNumber,
-          items,
-          totalAmount
-        });
-        console.log(`✅ Order confirmation email sent for ${orderNumber}`);
-      } catch (error) {
-        console.log(`❌ Order confirmation email failed for ${orderNumber}:`, error.message);
+      message: "Order placed successfully!",
+      data: {
+        orderNumber,
+        tableNumber,
+        customerName,
+        customerEmail,
+        customerPhone,
+        items,
+        totalAmount,
+        orderTime: order.createdAt,
+        estimatedTime: "20-25 minutes",
+        _id: order._id,
+        createdAt: order.createdAt
       }
     });
 
-    // Send order confirmation email immediately
-    // let emailStatus = { success: false, message: 'Email not attempted' };
-    // try {
-    //   await sendOrderConfirmationEmail(customerEmail, customerName, {
-    //     orderNumber,
-    //     tableNumber,
-    //     items,
-    //     totalAmount
-    //   });
-    //   console.log('Order confirmation email result:');
-    // } catch (error) {
-    //   console.log('Order confirmation email error:', error.message);
-    //   // emailStatus = { success: false, error: error.message };
-    // }
-
-    console.log('Sending response...');
-   
     console.log('Response sent successfully');
   } catch (error) {
     console.error('Order creation error:', error);
@@ -114,6 +93,13 @@ export const createOrder = async (req, res) => {
 
 export const getAllOrders = async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        status: false,
+        message: "Authentication required",
+      });
+    }
+
     let query = {};
     
     if (req.user.role === "SubUser") {
@@ -137,7 +123,7 @@ export const getAllOrders = async (req, res) => {
     res.status(200).json({
       status: true,
       count: orders.length,
-      data: orders,
+      data: orders || [],
     });
   } catch (error) {
     res.status(500).json({
@@ -253,15 +239,8 @@ export const updateOrderStatus = async (req, res) => {
       { new: true }
     );
 
-    // Send order status update email
-    let emailStatus = { success: false, message: 'Email not attempted' };
-    try {
-      emailStatus = await sendOrderStatusUpdateEmail(order, nextStatus.toLowerCase());
-      console.log(`Order status update email result for ${order.orderNumber}:`, emailStatus);
-    } catch (error) {
-      console.log(`Order status update email error for ${order.orderNumber}:`, error.message);
-      emailStatus = { success: false, error: error.message };
-    }
+    // Log status update (no email needed)
+    console.log(`Order ${order.orderNumber} status updated to ${nextStatus}`);
 
     await AuditLog.create({
       userId,

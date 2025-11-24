@@ -38,7 +38,7 @@ export const createCategory = async (req, res, next) => {
 // Get all categories
 export const getCategories = async (req, res) => {
   try {
-    const categories = await Category.find().sort({ name: 1 });
+    const categories = await Category.find().sort({ name: 1 }).lean();
 
     res.status(200).json({
       status: true,
