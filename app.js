@@ -33,9 +33,17 @@ const app = express();
 const server = createServer(app);
 export const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "https://chopie-resturant-frontend.vercel.app",
-    methods: ["GET", "POST"]
-  }
+    origin: [
+      process.env.FRONTEND_URL || "http://localhost:3000", 
+      "https://chopie-resturant-frontend.vercel.app",
+      "https://eatery-frontend-chopie.vercel.app",
+      "http://localhost:5173", // Vite default port
+      "http://localhost:3000"
+    ],
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  transports: ['websocket', 'polling']
 });
 
 const chatHub = new ChatHub(io);
@@ -44,7 +52,7 @@ export { chatHub };
 const PORT = process.env.PORT || 8000;
 
 app.use(cors({
-  origin: [process.env.FRONTEND_URL || "http://localhost:3000", "https://eatery-frontend-chopie.vercel.app"],
+  origin: [process.env.FRONTEND_URL ,process.env.PROD_FRONTEND_URL],
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
@@ -120,6 +128,33 @@ app.use("/api/v1/chat", (req, res, next) => {
 
 app.get("/test", (req, res) => {
   res.send("Server is working Bro");
+});
+
+// Test Socket.IO notification endpoint
+app.get("/test-notification", (req, res) => {
+  console.log('🧪 Testing Socket.IO notification...');
+  
+  const testOrderData = {
+    orderId: 'test-' + Date.now(),
+    orderNumber: 'TEST-001',
+    tableNumber: '5',
+    customerName: 'Test Customer',
+    customerEmail: 'test@example.com',
+    customerPhone: '+1234567890',
+    items: [{ name: 'Test Pizza', quantity: 1, totalPrice: 15.99 }],
+    totalAmount: 15.99,
+    status: 'pending',
+    createdAt: new Date()
+  };
+  
+  io.emit('newOrder', testOrderData);
+  console.log('✅ Test notification sent via Socket.IO');
+  
+  res.json({
+    status: true,
+    message: 'Test notification sent successfully',
+    data: testOrderData
+  });
 });
 
 
@@ -213,6 +248,19 @@ app.get("/api/v1/restaurant/profile", async (req, res) => {
 // });
 
 io.on('connection', (socket) => {
+  // console.log('🔌 New Socket.IO connection:', socket.id);
+  // console.log('🌐 Client origin:', socket.handshake.headers.origin);
+  
+  // Handle disconnection
+  socket.on('disconnect', (reason) => {
+    console.log('❌ Socket.IO disconnection:', socket.id, 'Reason:', reason);
+  });
+  
+  // Handle connection errors
+  socket.on('connect_error', (error) => {
+    console.error('🚨 Socket.IO connection error:', error);
+  });
+  
   chatHub.handleConnection(socket);
 });
 

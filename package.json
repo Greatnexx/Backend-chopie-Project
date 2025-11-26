@@ -8,7 +8,8 @@
     "start": "node app.js",
     "build": "npm install",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "test-email": "node test-email.js"
+    "test-email": "node test-email.js",
+    "test-socket": "node test-socket.js"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -29,6 +30,7 @@
     "mongoose": "^8.16.3",
     "nodemailer": "^7.0.6",
     "shortid": "^2.2.17",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
   }
 }

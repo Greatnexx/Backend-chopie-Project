@@ -22,8 +22,8 @@ router.patch('/menus/:menuId/toggle', protect, authorize('MenuManager'), toggleM
 // Order routes
 router.get('/orders', protect, getAllOrders);
 router.get('/orders/:orderId', protect, getOrderById);
-router.patch('/orders/:orderId/accept', protect, acceptOrder);
-router.patch('/orders/:orderId/reject', protect, rejectOrder);
-router.patch('/orders/:orderId/status', protect, updateOrderStatus);
+router.patch('/orders/:orderId/accept', protect,authorize('SuperAdmin', 'MenuManager'), acceptOrder);
+router.patch('/orders/:orderId/reject', protect,authorize('SuperAdmin', 'MenuManager'), rejectOrder);
+router.patch('/orders/:orderId/status', protect,authorize('SuperAdmin', 'MenuManager'), updateOrderStatus);
 
 export default router;

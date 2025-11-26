@@ -12,13 +12,13 @@ class ChatHub {
       const { chatId, userType, userName } = data;
       socket.join(chatId);
       this.userSockets.set(socket.id, { chatId, userType, userName });
-      console.log(`ChatHub: ${userType} ${userName} joined chat room: ${chatId}`);
+      
     });
 
     socket.on('sendMessage', (data) => {
       const { chatId, message } = data;
-      console.log('ChatHub: Broadcasting message to chat room:', chatId);
-      console.log('ChatHub: Message content:', message);
+      // console.log('ChatHub: Broadcasting message to chat room:', chatId);
+      // console.log('ChatHub: Message content:', message);
       
       // Broadcast to all OTHER users in the chat room (not sender)
       socket.to(chatId).emit('receiveMessage', {
@@ -27,7 +27,7 @@ class ChatHub {
         timestamp: new Date().toISOString()
       });
       
-      console.log(`ChatHub: Message broadcasted to room ${chatId}`);
+      // console.log(`ChatHub: Message broadcasted to room ${chatId}`);
     });
 
     socket.on('typing', (data) => {
