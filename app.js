@@ -51,11 +51,14 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Debug: Log all registered routes
+console.log('Registering routes...');
 app.use("/api/v1", userRoutes); 
 app.use("/api/v1", categoryRoutes); 
 app.use("/api/v1", menuRoutes); 
 app.use("/api/v1", orderRoutes);
 app.use("/api/v1/restaurant", restaurantRoutes);
+console.log('Restaurant routes registered at /api/v1/restaurant');
 
 
 app.use("/api/v1/chat", (req, res, next) => {
@@ -63,9 +66,19 @@ app.use("/api/v1/chat", (req, res, next) => {
   req.chatHub = chatHub;
   next();
 }, chatRoutes);
+giconsole.log('Chat routes registered at /api/v1/chat');
 
 app.get("/test", (req, res) => {
   res.send("Server is working Bro");
+});
+
+// Test endpoints to verify routes are working
+app.get("/api/v1/test-chat", (req, res) => {
+  res.json({ message: "Chat routes are registered", timestamp: new Date() });
+});
+
+app.get("/api/v1/test-restaurant", (req, res) => {
+  res.json({ message: "Restaurant routes are registered", timestamp: new Date() });
 });
 
 
