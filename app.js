@@ -17,29 +17,20 @@ import ChatHub from "./src/utils/chatHub.js";
 dotenv.config({ quiet: true });
 connectDB();
 
-// Test email configuration on startup
-// (async () => {
-//   console.log('🔧 Testing email configuration...');
-//   const emailWorking = await testEmailConfiguration();
-//   if (emailWorking) {
-//     console.log('✅ Email service is ready for order confirmations');
-//   } else {
-//     console.log('❌ Email service failed - order confirmations will not be sent');
-//     console.log('💡 Check your EMAIL_USER and EMAIL_PASS environment variables');
-//   }
-// })();
+
+// Define allowed origins for both Express and Socket.IO
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.PROD_FRONTEND_URL
+  
+  
+].filter(Boolean); // Remove undefined values
 
 const app = express();
 const server = createServer(app);
 export const io = new Server(server, {
   cors: {
-    origin: [
-      process.env.FRONTEND_URL || "http://localhost:3000", 
-      "https://chopie-resturant-frontend.vercel.app",
-      "https://eatery-frontend-chopie.vercel.app",
-      "http://localhost:5173", // Vite default port
-      "http://localhost:3000"
-    ],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   },
@@ -52,7 +43,7 @@ export { chatHub };
 const PORT = process.env.PORT || 8000;
 
 app.use(cors({
-  origin: [process.env.FRONTEND_URL ,process.env.PROD_FRONTEND_URL],
+  origin: allowedOrigins,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
@@ -209,43 +200,6 @@ app.get("/api/v1/restaurant/profile", async (req, res) => {
   }
 });
 
-// app.get("/test-email", async (req, res) => {
-//   try {
-//     const { testEmailConfiguration } = await import("./src/utils/emailService.js");
-//     const isWorking = await testEmailConfiguration();
-//     res.json({ 
-//       status: isWorking, 
-//       message: isWorking ? "Email service is working" : "Email service failed"
-//     });
-//   } catch (error) {
-//     res.status(500).json({ status: false, message: error.message });
-//   }
-// });
-
-// app.post("/test-send-email", async (req, res) => {
-//   try {
-//     const { email } = req.body;
-//     if (!email) {
-//       return res.status(400).json({ status: false, message: "Email address required" });
-//     }
-    
-//     const { sendOrderConfirmationEmail } = await import("./src/utils/emailService.js");
-//     const result = await sendOrderConfirmationEmail(email, "Test User", {
-//       orderNumber: "TEST-001",
-//       tableNumber: "5",
-//       items: [{ name: "Test Pizza", quantity: 1, totalPrice: 15.99 }],
-//       totalAmount: 15.99
-//     });
-    
-//     res.json({ 
-//       status: result.success, 
-//       message: result.success ? "Test email sent successfully" : "Test email failed",
-//       error: result.error || null
-//     });
-//   } catch (error) {
-//     res.status(500).json({ status: false, message: error.message });
-//   }
-// });
 
 io.on('connection', (socket) => {
   // console.log('🔌 New Socket.IO connection:', socket.id);
