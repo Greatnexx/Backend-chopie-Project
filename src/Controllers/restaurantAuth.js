@@ -1,7 +1,6 @@
 import RestaurantUser from "../models/restaurantUserModel.js";
 import AuditLog from "../models/auditLogModel.js";
 import jwt from "jsonwebtoken";
-import { sendUserCredentialsEmail } from "../utils/emailService.js";
 
 
 const generateToken = (id) => {
@@ -41,6 +40,7 @@ export const loginRestaurantUser = async (req, res) => {
         role: user.role || '',
         isActive: user.isActive !== undefined ? user.isActive : true,
         stars: user.stars || 0,
+        isFirstLogin: user.isFirstLogin || false,
         token,
       },
     });
@@ -51,6 +51,19 @@ export const loginRestaurantUser = async (req, res) => {
       error: error.message,
     });
   }
+};
+
+// Helper function to generate password from name
+const generatePasswordFromName = (fullName) => {
+  const nameParts = fullName.trim().split(' ');
+  // Use the last name (surname) or first name if only one name provided
+  const surname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0];
+  return surname.toUpperCase();
+};
+
+// Helper function to get the default password for display (only for first-time users)
+const getDefaultPassword = (fullName, isFirstLogin) => {
+  return isFirstLogin ? generatePasswordFromName(fullName) : null;
 };
 
 export const createRestaurantUser = async (req, res) => {
@@ -66,18 +79,17 @@ export const createRestaurantUser = async (req, res) => {
       });
     }
 
-    const generatedPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+    const generatedPassword = generatePasswordFromName(name);
     
-    const user = await RestaurantUser.create({ name, email, password: generatedPassword, role });
+    const user = await RestaurantUser.create({ 
+      name, 
+      email, 
+      password: generatedPassword, 
+      role,
+      isFirstLogin: true 
+    });
+    
     await logAction(req.user._id, "CREATE_USER", `Created user: ${email}`, ipAddress);
-
-    // Send credentials via email immediately
-    try {
-      await sendUserCredentialsEmail({ name, email, password: generatedPassword, role });
-      console.log(`Credentials email processed for ${email}`);
-    } catch (error) {
-      console.log(`Credentials email error for ${email}:`, error.message);
-    }
 
     res.status(201).json({
       status: true,
@@ -87,6 +99,7 @@ export const createRestaurantUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        temporaryPassword: generatedPassword, // Return the password for admin to share
       },
     });
   } catch (error) {
@@ -113,6 +126,8 @@ export const getAllUsers = async (req, res) => {
       role: user.role || '',
       isActive: user.isActive !== undefined ? user.isActive : true,
       stars: user.stars || 0,
+      isFirstLogin: user.isFirstLogin || false,
+      defaultPassword: getDefaultPassword(user.name, user.isFirstLogin), // Show password only for first-time users
       createdAt: user.createdAt,
       updatedAt: user.updatedAt
     }));
@@ -291,11 +306,110 @@ export const changePassword = async (req, res) => {
     }
 
     user.password = newPassword;
+    user.isFirstLogin = false; // Mark as no longer first login
     await user.save();
 
     await logAction(userId, "CHANGE_PASSWORD", "Password changed", ipAddress);
 
     res.json({ status: true, message: "Password updated successfully" });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+// New endpoint for first-time password change
+export const firstTimePasswordChange = async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+    const userId = req.user._id;
+    const ipAddress = req.ip;
+
+    const user = await RestaurantUser.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    if (!user.isFirstLogin) {
+      return res.status(400).json({
+        status: false,
+        message: "Password has already been changed",
+      });
+    }
+
+    user.password = newPassword;
+    user.isFirstLogin = false;
+    await user.save();
+
+    await logAction(userId, "FIRST_PASSWORD_CHANGE", "First-time password changed", ipAddress);
+
+    res.json({ status: true, message: "Password set successfully" });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+// Get user credentials for admin (only shows default password for first-time users)
+export const getUserCredentials = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const user = await RestaurantUser.findById(userId).select("-password");
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    const credentials = {
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      isFirstLogin: user.isFirstLogin,
+      defaultPassword: user.isFirstLogin ? generatePasswordFromName(user.name) : null,
+      message: user.isFirstLogin 
+        ? "This user hasn't changed their password yet. Share these credentials with them." 
+        : "This user has already set their own password."
+    };
+
+    res.json({ status: true, data: credentials });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+// Reset user password to default (admin only)
+export const resetUserPassword = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const ipAddress = req.ip;
+    
+    const user = await RestaurantUser.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    const defaultPassword = generatePasswordFromName(user.name);
+    user.password = defaultPassword;
+    user.isFirstLogin = true;
+    await user.save();
+
+    await logAction(req.user._id, "RESET_PASSWORD", `Reset password for user: ${user.email}`, ipAddress);
+
+    res.json({ 
+      status: true, 
+      message: "Password reset successfully",
+      data: {
+        email: user.email,
+        defaultPassword: defaultPassword
+      }
+    });
   } catch (error) {
     res.status(500).json({ status: false, message: error.message });
   }

@@ -1,5 +1,5 @@
 import express from 'express';
-import { loginRestaurantUser, createRestaurantUser, getAllUsers, toggleUserStatus, awardStar, getAnalytics, getAuditLogs, searchOrders, changePassword, toggleMenuAvailability, getAllMenuItems, deleteUser } from '../Controllers/restaurantAuth.js';
+import { loginRestaurantUser, createRestaurantUser, getAllUsers, toggleUserStatus, awardStar, getAnalytics, getAuditLogs, searchOrders, changePassword, firstTimePasswordChange, getUserCredentials, resetUserPassword, toggleMenuAvailability, getAllMenuItems, deleteUser } from '../Controllers/restaurantAuth.js';
 import { acceptOrder, rejectOrder, updateOrderStatus, getAllOrders, getOrderById } from '../Controllers/order.js';
 import { protect, authorize } from '../middlewares/restaurantAuth.js';
 
@@ -16,6 +16,9 @@ router.get('/analytics', protect, authorize('SuperAdmin', 'TransactionAdmin'), g
 router.get('/audit', protect, authorize('SuperAdmin', 'TransactionAdmin'), getAuditLogs);
 router.get('/orders/search', protect, searchOrders);
 router.patch('/change-password', protect, changePassword);
+router.patch('/first-time-password', protect, firstTimePasswordChange);
+router.get('/users/:userId/credentials', protect, authorize('SuperAdmin'), getUserCredentials);
+router.patch('/users/:userId/reset-password', protect, authorize('SuperAdmin'), resetUserPassword);
 router.get('/menus', protect, authorize('MenuManager', 'SuperAdmin'), getAllMenuItems);
 router.patch('/menus/:menuId/toggle', protect, authorize('MenuManager'), toggleMenuAvailability);
 

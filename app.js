@@ -51,59 +51,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Global response sanitizer to prevent undefined values
-app.use((req, res, next) => {
-  const originalJson = res.json;
-  res.json = function(data) {
-    if (data && typeof data === 'object') {
-      const sanitized = sanitizeObject(data);
-      return originalJson.call(this, sanitized);
-    }
-    return originalJson.call(this, data);
-  };
-  next();
-});
-
-function sanitizeObject(obj) {
-  if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeObject(item));
-  }
-  if (obj && typeof obj === 'object') {
-    // Handle Mongoose documents by converting to plain object
-    if (obj.toObject && typeof obj.toObject === 'function') {
-      obj = obj.toObject();
-    }
-    
-    // Handle ObjectId by converting to string
-    if (obj.constructor && obj.constructor.name === 'ObjectId') {
-      return obj.toString();
-    }
-    
-    const sanitized = {};
-    for (const [key, value] of Object.entries(obj)) {
-      // Skip Mongoose internal fields but keep _id
-      if (key.startsWith('$') || key === '_doc' || key === '__v') {
-        continue;
-      }
-      
-      if (value === undefined || value === null) {
-        sanitized[key] = null;
-      } else if (typeof value === 'object') {
-        // Handle ObjectId specifically
-        if (value.constructor && value.constructor.name === 'ObjectId') {
-          sanitized[key] = value.toString();
-        } else {
-          sanitized[key] = sanitizeObject(value);
-        }
-      } else {
-        sanitized[key] = value;
-      }
-    }
-    return sanitized;
-  }
-  return obj;
-}
-
 app.use("/api/v1", userRoutes); 
 app.use("/api/v1", categoryRoutes); 
 app.use("/api/v1", menuRoutes); 
@@ -120,34 +67,6 @@ app.use("/api/v1/chat", (req, res, next) => {
 app.get("/test", (req, res) => {
   res.send("Server is working Bro");
 });
-
-// Test Socket.IO notification endpoint
-app.get("/test-notification", (req, res) => {
-  console.log('🧪 Testing Socket.IO notification...');
-  
-  const testOrderData = {
-    orderId: 'test-' + Date.now(),
-    orderNumber: 'TEST-001',
-    tableNumber: '5',
-    customerName: 'Test Customer',
-    customerEmail: 'test@example.com',
-    customerPhone: '+1234567890',
-    items: [{ name: 'Test Pizza', quantity: 1, totalPrice: 15.99 }],
-    totalAmount: 15.99,
-    status: 'pending',
-    createdAt: new Date()
-  };
-  
-  io.emit('newOrder', testOrderData);
-  console.log('✅ Test notification sent via Socket.IO');
-  
-  res.json({
-    status: true,
-    message: 'Test notification sent successfully',
-    data: testOrderData
-  });
-});
-
 
 
 app.get("/api/v1/restaurant/dashboard", async (req, res) => {

@@ -455,7 +455,7 @@ export const sendOrderStatusUpdateEmail = async (order, newStatus) => {
       preparing: {
         title: '👨🍳 Your Order is Being Prepared!',
         message: 'Great news! Our kitchen team has started preparing your delicious meal.',
-        estimatedTime: '15-20 minutes'
+        estimatedTime: '5-10 minutes'
       },
       completed: {
         title: '🎉 Your Order is Ready!',
