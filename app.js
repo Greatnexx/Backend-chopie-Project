@@ -66,7 +66,6 @@ app.use("/api/v1/chat", (req, res, next) => {
   req.chatHub = chatHub;
   next();
 }, chatRoutes);
-giconsole.log('Chat routes registered at /api/v1/chat');
 
 app.get("/test", (req, res) => {
   res.send("Server is working Bro");

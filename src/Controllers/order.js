@@ -58,8 +58,7 @@ export const createOrder = async (req, res) => {
       customerPhone,
       items,
       totalAmount,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      // Remove manual date setting - let Mongoose timestamps handle it
     });
     console.log('Order created successfully:', order._id);
 
@@ -91,7 +90,7 @@ export const createOrder = async (req, res) => {
         customerPhone,
         items,
         totalAmount,
-        orderTime: order.createdAt || new Date(),
+        orderTime: order.createdAt || order.createdAt || new Date(),
         estimatedTime: "20-25 minutes",
         _id: order._id,
         createdAt: order.createdAt || new Date()
