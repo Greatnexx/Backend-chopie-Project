@@ -99,7 +99,7 @@ export const createOrder = async (req, res) => {
         totalAmount,
         paymentMethod,
         orderTime: order.createdAt || order.createdAt || new Date(),
-        estimatedTime: "20-25 minutes",
+        estimatedTime: "5-10 minutes",
         _id: order._id,
         createdAt: order.createdAt || new Date()
       }
@@ -316,7 +316,7 @@ export const searchOrder = async (req, res) => {
 
       switch (order.status) {
         case "pending":
-          return "20-25 minutes";
+          return "5-10 minutes";
         case "Preparing":
           return `${Math.max(15 - timeDiff, 5)}-${Math.max(
             20 - timeDiff,
@@ -455,7 +455,7 @@ export const trackOrder = async (req, res) => {
 
       switch (order.status) {
         case "pending":
-          return "20-25 minutes";
+          return "5-10 minutes";
         case "Preparing":
           return `${Math.max(15 - timeDiff, 5)}-${Math.max(
             20 - timeDiff,
