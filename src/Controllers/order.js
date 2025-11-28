@@ -7,13 +7,18 @@ import { io } from "../../app.js";
 export const createOrder = async (req, res) => {
   console.log('Order creation started:', new Date().toISOString());
   try {
-    const { tableNumber, customerName, customerEmail, customerPhone, items, totalAmount, confirmDuplicate } = req.body;
-    console.log('Request data received:', { tableNumber, customerName, customerEmail, itemsCount: items?.length, totalAmount, confirmDuplicate });
+    const { tableNumber, customerName, customerEmail, customerPhone, items, totalAmount, paymentMethod, confirmDuplicate } = req.body;
+    console.log('Request data received:', { tableNumber, customerName, customerEmail, itemsCount: items?.length, totalAmount, paymentMethod, confirmDuplicate });
 
     // Basic validation
-    if (!tableNumber || !customerName || !customerEmail || !items || !totalAmount) {
+    if (!tableNumber || !customerName || !customerEmail || !items || !totalAmount || !paymentMethod) {
       console.log('Validation failed: Missing required fields');
       return res.status(400).json({ status: false, message: "Missing required fields" });
+    }
+
+    if (!['cash', 'transfer'].includes(paymentMethod)) {
+      console.log('Validation failed: Invalid payment method');
+      return res.status(400).json({ status: false, message: "Invalid payment method" });
     }
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -58,6 +63,7 @@ export const createOrder = async (req, res) => {
       customerPhone,
       items,
       totalAmount,
+      paymentMethod,
       // Remove manual date setting - let Mongoose timestamps handle it
     });
     console.log('Order created successfully:', order._id);
@@ -73,6 +79,7 @@ export const createOrder = async (req, res) => {
       customerPhone,
       items,
       totalAmount,
+      paymentMethod,
       status: 'pending',
       createdAt: order.createdAt || new Date()
     });
@@ -90,6 +97,7 @@ export const createOrder = async (req, res) => {
         customerPhone,
         items,
         totalAmount,
+        paymentMethod,
         orderTime: order.createdAt || order.createdAt || new Date(),
         estimatedTime: "20-25 minutes",
         _id: order._id,
