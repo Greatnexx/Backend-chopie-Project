@@ -613,7 +613,6 @@ export const deleteOrder = async (req, res) => {
     }
     const deletedOrder = await Order.findByIdAndDelete(orderId);
 
-
     res.status(200).json({
       status: true,
       message: "Order deleted successfully",
@@ -626,4 +625,57 @@ export const deleteOrder = async (req, res) => {
       error: error.message,
     });
   }
-}
+};
+
+// Get daily payment summary
+export const getDailyPaymentSummary = async (req, res) => {
+  try {
+    const { date } = req.query;
+    const targetDate = date ? new Date(date) : new Date();
+    
+    const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+
+    const summary = await Order.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startOfDay, $lte: endOfDay },
+          status: { $ne: "cancelled" }
+        }
+      },
+      {
+        $group: {
+          _id: "$paymentMethod",
+          count: { $sum: 1 },
+          total: { $sum: "$totalAmount" }
+        }
+      }
+    ]);
+
+    const result = {
+      date: startOfDay.toDateString(),
+      cash: { count: 0, total: 0 },
+      transfer: { count: 0, total: 0 },
+      grandTotal: 0
+    };
+
+    summary.forEach(item => {
+      result[item._id] = { count: item.count, total: item.total };
+      result.grandTotal += item.total;
+    });
+
+    res.status(200).json({
+      status: true,
+      message: "Daily payment summary fetched successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: false,
+      message: "Failed to fetch payment summary",
+      error: error.message,
+    });
+  }
+};
+    
+  

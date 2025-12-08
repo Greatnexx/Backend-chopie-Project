@@ -93,6 +93,21 @@ const sendMessage = async (req, res) => {
     const savedMessage = chat.messages[chat.messages.length - 1];
     console.log('API: Message saved successfully:', savedMessage._id);
     
+    // Emit socket event to notify all connected clients
+    req.io.to(chatId).emit('newMessage', {
+      chatId,
+      message: savedMessage
+    });
+    
+    // Also emit to all staff members for chat list updates
+    req.io.emit('chatUpdate', {
+      chatId,
+      lastMessage: savedMessage,
+      lastActivity: chat.lastActivity
+    });
+    
+    console.log('Socket events emitted for new message');
+    
     successResponse(res, 200, 'Message sent', savedMessage);
   } catch (error) {
     console.error('API: Send message error:', error);

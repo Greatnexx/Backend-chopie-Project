@@ -40,6 +40,12 @@ const seedUsers = async () => {
         email: "menu@restaurant.com",
         password: "menu123",
         role: "MenuManager"
+      },
+      {
+        name: "Event Manager",
+        email: "events@restaurant.com",
+        password: "events123",
+        role: "MenuManager"
       }
     ];
     

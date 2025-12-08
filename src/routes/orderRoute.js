@@ -1,5 +1,5 @@
 import express from 'express';
-import { createOrder, deleteOrder, getAllOrders, getOrderById, trackOrder, searchOrder } from '../Controllers/order.js';
+import { createOrder, deleteOrder, getAllOrders, getOrderById, trackOrder, searchOrder, getDailyPaymentSummary } from '../Controllers/order.js';
 const router = express.Router();
 
 // Backward compatible updateOrder function
@@ -59,11 +59,11 @@ router.get('/order/test', (req, res) => {
 
 router.post('/order', createOrder);
 router.get('/order', getAllOrders);
-// router.patch('/order/:orderId', updateOrder);
+router.get('/order/payment-summary', getDailyPaymentSummary);
+router.get('/order/search/:searchTerm', searchOrder);
+router.get('/order/:orderNumber/track', trackOrder);
 router.get('/order/:orderId', getOrderById);
 router.delete('/order/:orderId', deleteOrder);
-router.get('/order/:orderNumber/track', trackOrder);
-router.get('/order/search/:searchTerm', searchOrder);
 router.patch("/order/:orderNumber", updateOrder);
 
 export default router;

@@ -13,8 +13,17 @@ const menuSchema = new mongoose.Schema(
     },
     price: {
       type: Number,
-      required: true,
       min: 0,
+    },
+    menuTypes: {
+      VIP: {
+        price: { type: Number, min: 0 },
+        available: { type: Boolean, default: true }
+      },
+      REGULAR: {
+        price: { type: Number, min: 0 },
+        available: { type: Boolean, default: true }
+      }
     },
     image: {
       type: String,

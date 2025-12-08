@@ -12,7 +12,7 @@ const categorySchema = new mongoose.Schema(
     image: {
       type: String,
       required: false,
-      default: "https://example.com/default-category-image.jpg", 
+      
     },
 
   },

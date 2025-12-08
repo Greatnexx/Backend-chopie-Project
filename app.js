@@ -12,6 +12,7 @@ import menuRoutes from "./src/routes/menuRoutes.js"
 import orderRoutes from "./src/routes/orderRoute.js";
 import restaurantRoutes from "./src/routes/restaurantRoutes.js";
 import chatRoutes from "./src/routes/chatRoutes.js";
+import eventRoutes from "./src/routes/eventRoutes.js";
 import ChatHub from "./src/utils/chatHub.js";
 // import { testEmailConfiguration } from "./src/utils/emailService.js";
 dotenv.config({ quiet: true });
@@ -48,17 +49,19 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Debug: Log all registered routes
-console.log('Registering routes...');
+app.use('/uploads', express.static('uploads'));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 app.use("/api/v1", userRoutes); 
 app.use("/api/v1", categoryRoutes); 
 app.use("/api/v1", menuRoutes); 
+
 app.use("/api/v1", orderRoutes);
+app.use("/api/v1", eventRoutes);
 app.use("/api/v1/restaurant", restaurantRoutes);
-console.log('Restaurant routes registered at /api/v1/restaurant');
+
 
 
 app.use("/api/v1/chat", (req, res, next) => {

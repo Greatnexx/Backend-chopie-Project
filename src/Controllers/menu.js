@@ -1,21 +1,36 @@
 
 import Menu from "../models/menuModel.js";
 import Category from "../models/categoryModel.js";
+import fs from 'fs';
+
+// Utility function to determine menu type from table number
+const getMenuTypeFromTable = (tableNumber) => {
+  if (!tableNumber) return 'REGULAR';
+  if (tableNumber.toString().toUpperCase().startsWith('VIP')) return 'VIP';
+  return 'REGULAR';
+};
 
 // Create a new menu
 export const createMenu = async (req, res) => {
   try {
-    // const user_id = req.user._id;
-    const { name, description, price, image, available, category } = req.body;
+    
+    
+    const { name, description, price, available, category } = req.body;
+    let { menuTypes } = req.body;
 
-    // if (!user_id) {
-    //   return res.status(401).json({
-    //     status: false,
-    //     message: "UnAuthorized",
-    //   });
-    // }
+    // Parse menuTypes if it's a string (from FormData)
+    if (typeof menuTypes === 'string') {
+      try {
+        menuTypes = JSON.parse(menuTypes);
+      } catch (error) {
+        console.error('Error parsing menuTypes:', error);
+        menuTypes = null;
+      }
+    }
 
-    // Validate that category exists and belongs to the user
+    console.log('Creating menu with data:', { name, description, price, available, category, menuTypes });
+
+    // Validate that category exists
     const categoryExists = await Category.findOne({
       _id: category,
     });
@@ -26,16 +41,30 @@ export const createMenu = async (req, res) => {
       });
     }
 
-    const menu = new Menu({
+    // Handle image upload
+    let imagePath = null;
+    if (req.file) {
+      imagePath = `/uploads/menu-images/${req.file.filename}`;
+    }
+
+    const menuData = {
       name,
       description,
       price,
-      image,
+      image: imagePath,
       available,
       category,
-    });
+    };
+
+    // Add menuTypes if provided
+    if (menuTypes) {
+      menuData.menuTypes = menuTypes;
+    }
+
+    const menu = new Menu(menuData);
 
     await menu.save();
+    console.log('Menu saved:', menu);
 
     // Populate category info in response
     await menu.populate("category");
@@ -46,6 +75,7 @@ export const createMenu = async (req, res) => {
       data: menu,
     });
   } catch (error) {
+    console.error('Error creating menu:', error);
     res.status(500).json({
       success: false,
       message: "Error creating menu",
@@ -161,14 +191,25 @@ export const getMenuById = async (req, res) => {
 // Update menu
 export const updateMenu = async (req, res) => {
   try {
-    const { name, description, price, image, available, category } = req.body;
+    const { name, description, price, available, category } = req.body;
+    let { menuTypes } = req.body;
     const {id} = req.params;
 
-    // / Create an object with only the fields that are defined
-    // This is a dynamic way to update only the fields the user sends in their request.
-    // we loop through the allowed field if the field is part of the req.body add to the object called updates
+    // Parse menuTypes if it's a string (from FormData)
+    if (typeof menuTypes === 'string') {
+      try {
+        menuTypes = JSON.parse(menuTypes);
+      } catch (error) {
+        console.error('Error parsing menuTypes:', error);
+        menuTypes = null;
+      }
+    }
+
+    console.log('Updating menu with data:', { name, description, price, available, category, menuTypes });
+
+    // Create an object with only the fields that are defined
     const updates = {};
-    const allowedFields = ["name", "description", "price", "image", "available", "category"];
+    const allowedFields = ["name", "description", "price", "available", "category", "menuTypes"];
 
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) {
@@ -176,13 +217,16 @@ export const updateMenu = async (req, res) => {
       }
     });
 
-    
+    // Handle image upload if new file is provided
+    if (req.file) {
+      updates.image = `/uploads/menu-images/${req.file.filename}`;
+    }
 
     const menu = await Menu.findOneAndUpdate(
       { _id: id },
       updates,
       { new: true, runValidators: true }
-    )
+    ).populate("category");
 
     if (!menu) {
       return res.status(404).json({
@@ -191,12 +235,15 @@ export const updateMenu = async (req, res) => {
       });
     }
 
+    console.log('Menu updated:', menu);
+
     res.status(200).json({
       status: true,
       message: "Menu updated successfully",
       data: menu,
     });
   } catch (error) {
+    console.error('Error updating menu:', error);
     res.status(500).json({
       status: false,
       message: "Error updating menu",
@@ -394,6 +441,165 @@ export const getAllMenusForManagement = async (req, res) => {
   }
 };
 
+// Get menus by table (VIP or Regular based on table number)
+export const getMenusByTable = async (req, res) => {
+  try {
+    const { tableNumber } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+
+    if (!tableNumber) {
+      return res.status(400).json({
+        success: false,
+        message: "Table number is required",
+      });
+    }
+
+    const menuType = getMenuTypeFromTable(tableNumber);
+    
+    // Get all available menus and filter by menu type
+    const menus = await Menu.find({ available: true })
+      .populate("category")
+      .sort({ name: 1 });
+
+    // Filter and transform menus based on menu type
+    const filteredMenus = menus
+      .filter(menu => {
+        // Check if item is available for this menu type
+        if (menu.menuTypes && menu.menuTypes[menuType]) {
+          return menu.menuTypes[menuType].available;
+        }
+        // Fallback to regular price if menuTypes not set
+        return menuType === 'REGULAR';
+      })
+      .map(menu => {
+        // Transform menu to show correct price for menu type
+        const menuObj = menu.toObject();
+        if (menu.menuTypes && menu.menuTypes[menuType]) {
+          menuObj.price = menu.menuTypes[menuType].price;
+        }
+        menuObj.menuType = menuType;
+        return menuObj;
+      });
+
+    // Apply pagination
+    const skip = (page - 1) * limit;
+    const paginatedMenus = filteredMenus.slice(skip, skip + parseInt(limit));
+
+    res.status(200).json({
+      success: true,
+      data: paginatedMenus,
+      menuType,
+      tableNumber,
+      count: paginatedMenus.length,
+      total: filteredMenus.length,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(filteredMenus.length / limit),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching menus by table",
+      error: error.message,
+    });
+  }
+};
+
+// Get menus by category and table
+export const getMenusByCategoryAndTable = async (req, res) => {
+  try {
+    const { categoryId, tableNumber } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+
+    console.log('getMenusByCategoryAndTable called with:', { categoryId, tableNumber });
+
+    if (!categoryId || !tableNumber) {
+      return res.status(400).json({
+        success: false,
+        message: "Category ID and table number are required",
+      });
+    }
+
+    const menuType = getMenuTypeFromTable(tableNumber);
+    console.log('Determined menu type:', menuType);
+
+    // Validate category exists
+    const category = await Category.findById(categoryId);
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found",
+      });
+    }
+
+    // Get menus for this category
+    const menus = await Menu.find({ 
+      category: categoryId, 
+      available: true 
+    })
+      .populate("category")
+      .sort({ name: 1 });
+
+    console.log('Found menus:', menus.length);
+    console.log('Sample menu structure:', menus[0] ? {
+      name: menus[0].name,
+      menuTypes: menus[0].menuTypes,
+      available: menus[0].available
+    } : 'No menus found');
+
+    // Filter and transform menus based on menu type
+    const filteredMenus = menus
+      .filter(menu => {
+        console.log(`Checking menu ${menu.name}:`, {
+          hasMenuTypes: !!menu.menuTypes,
+          menuTypeData: menu.menuTypes?.[menuType],
+          menuTypeAvailable: menu.menuTypes?.[menuType]?.available
+        });
+        
+        if (menu.menuTypes && menu.menuTypes[menuType]) {
+          return menu.menuTypes[menuType].available;
+        }
+        return menuType === 'REGULAR';
+      })
+      .map(menu => {
+        const menuObj = menu.toObject();
+        if (menu.menuTypes && menu.menuTypes[menuType]) {
+          menuObj.price = menu.menuTypes[menuType].price;
+        }
+        menuObj.menuType = menuType;
+        return menuObj;
+      });
+
+    console.log('Filtered menus count:', filteredMenus.length);
+
+    // Apply pagination
+    const skip = (page - 1) * limit;
+    const paginatedMenus = filteredMenus.slice(skip, skip + parseInt(limit));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        menus: paginatedMenus,
+        pagination: {
+          count: paginatedMenus.length,
+          total: filteredMenus.length,
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(filteredMenus.length / limit),
+        }
+      },
+      menuType,
+      tableNumber,
+      category: category.name
+    });
+  } catch (error) {
+    console.error('Error in getMenusByCategoryAndTable:', error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching menus by category and table",
+      error: error.message,
+    });
+  }
+};
+
 // Search menus
 export const searchMenus = async (req, res) => {
   try {
@@ -409,7 +615,6 @@ export const searchMenus = async (req, res) => {
 
     // Build search filter
     const filter = {
-      user: user_id,
       $or: [
         { name: { $regex: q, $options: "i" } },
         { description: { $regex: q, $options: "i" } },
