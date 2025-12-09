@@ -253,41 +253,41 @@ export const updateMenu = async (req, res) => {
 };
 
 // Delete menu
-// export const deleteMenu = async (req, res) => {
-//   try {
-//     const user_id = req.user._id;
+export const deleteMenu = async (req, res) => {
+  try {
+    const { id } = req.params;
 
-//     if (!user_id) {
-//       return res.status(401).json({
-//         success: false,
-//         message: "UnAuthorized",
-//       });
-//     }
+    const menu = await Menu.findById(id);
 
-//     const menu = await Menu.findOneAndDelete({
-//       _id: req.params.id,
-//       user: user_id,
-//     });
+    if (!menu) {
+      return res.status(404).json({
+        success: false,
+        message: "Menu not found",
+      });
+    }
 
-//     if (!menu) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Menu not found",
-//       });
-//     }
+    // Delete image file if exists
+    if (menu.image) {
+      const imagePath = `.${menu.image}`;
+      if (fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath);
+      }
+    }
 
-//     res.status(200).json({
-//       success: true,
-//       message: "Menu deleted successfully",
-//     });
-//   } catch (error) {
-//     res.status(500).json({
-//       success: false,
-//       message: "Error deleting menu",
-//       error: error.message,
-//     });
-//   }
-// };
+    await Menu.findByIdAndDelete(id);
+
+    res.status(200).json({
+      success: true,
+      message: "Menu deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error deleting menu",
+      error: error.message,
+    });
+  }
+};
 
 export const toggleMenuAvailability = async (req, res) => {
   try {

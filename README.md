@@ -8,8 +8,6 @@
    - `MONGODB_URI` - Your MongoDB connection string
    - `JWT_SECRET` - Your JWT secret key
    - `FRONTEND_URL` - Your frontend URL (for CORS)
-   - `EMAIL_USER` - Email service username
-   - `EMAIL_PASS` - Email service password
    - `PORT` - Will be set automatically by Render
 
 ## Local Development

@@ -14,7 +14,7 @@ import restaurantRoutes from "./src/routes/restaurantRoutes.js";
 import chatRoutes from "./src/routes/chatRoutes.js";
 import eventRoutes from "./src/routes/eventRoutes.js";
 import ChatHub from "./src/utils/chatHub.js";
-// import { testEmailConfiguration } from "./src/utils/emailService.js";
+
 dotenv.config({ quiet: true });
 connectDB();
 
