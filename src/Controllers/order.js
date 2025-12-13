@@ -7,11 +7,11 @@ import { io } from "../../app.js";
 export const createOrder = async (req, res) => {
   console.log('Order creation started:', new Date().toISOString());
   try {
-    const { tableNumber, customerName, customerEmail, customerPhone, items, totalAmount, paymentMethod, confirmDuplicate } = req.body;
-    console.log('Request data received:', { tableNumber, customerName, customerEmail, itemsCount: items?.length, totalAmount, paymentMethod, confirmDuplicate });
+    const { tableNumber, customerName, customerPhone, items, totalAmount, paymentMethod, confirmDuplicate } = req.body;
+    console.log('Request data received:', { tableNumber, customerName, itemsCount: items?.length, totalAmount, paymentMethod, confirmDuplicate });
 
     // Basic validation
-    if (!tableNumber || !customerName || !customerEmail || !items || !totalAmount || !paymentMethod) {
+    if (!tableNumber || !customerName || !items || !totalAmount || !paymentMethod) {
       console.log('Validation failed: Missing required fields');
       return res.status(400).json({ status: false, message: "Missing required fields" });
     }
@@ -30,7 +30,7 @@ export const createOrder = async (req, res) => {
     if (!confirmDuplicate) {
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
       const existingOrder = await Order.findOne({
-        customerEmail,
+        customerName,
         tableNumber,
         totalAmount,
         createdAt: { $gte: fiveMinutesAgo }
@@ -59,7 +59,6 @@ export const createOrder = async (req, res) => {
       orderNumber,
       tableNumber,
       customerName,
-      customerEmail,
       customerPhone,
       items,
       totalAmount,
@@ -75,7 +74,6 @@ export const createOrder = async (req, res) => {
       orderNumber,
       tableNumber,
       customerName,
-      customerEmail,
       customerPhone,
       items,
       totalAmount,
@@ -93,7 +91,6 @@ export const createOrder = async (req, res) => {
         orderNumber,
         tableNumber,
         customerName,
-        customerEmail,
         customerPhone,
         items,
         totalAmount,
@@ -292,19 +289,15 @@ export const searchOrder = async (req, res) => {
     let order = await Order.findOne({ orderNumber: searchTerm });
     
     if (!order) {
-      // For email and phone searches, get the most recent order
-      order = await Order.findOne({ customerEmail: searchTerm }).sort({ createdAt: -1 });
-    }
-    
-    if (!order) {
+      // For phone searches, get the most recent order
       order = await Order.findOne({ customerPhone: searchTerm }).sort({ createdAt: -1 });
     }
-
+    
     if (!order) {
       return res.status(404).json({
         status: false,
         message:
-          "Order not found. Please check your order number, email, or phone number and try again.",
+          "Order not found. Please check your order number or phone number and try again.",
       });
     }
 
@@ -413,7 +406,6 @@ export const searchOrder = async (req, res) => {
         name: order.customerName,
         table: `Table ${order.tableNumber}`,
         phone: order.customerPhone || "+234 801 234 5678",
-        email: order.customerEmail,
       },
       statusHistory: createStatusHistory(order),
     };
@@ -551,8 +543,7 @@ export const trackOrder = async (req, res) => {
       customerInfo: {
         name: order.customerName,
         table: `Table ${order.tableNumber}`,
-        phone: "+234 801 234 5678", // Default since no phone in model
-        email: order.customerEmail,
+        phone: order.customerPhone || "+234 801 234 5678",
       },
       statusHistory: createStatusHistory(order),
     };

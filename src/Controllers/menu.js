@@ -510,7 +510,7 @@ export const getMenusByCategoryAndTable = async (req, res) => {
     const { categoryId, tableNumber } = req.params;
     const { page = 1, limit = 10 } = req.query;
 
-    console.log('getMenusByCategoryAndTable called with:', { categoryId, tableNumber });
+    
 
     if (!categoryId || !tableNumber) {
       return res.status(400).json({
@@ -520,8 +520,7 @@ export const getMenusByCategoryAndTable = async (req, res) => {
     }
 
     const menuType = getMenuTypeFromTable(tableNumber);
-    console.log('Determined menu type:', menuType);
-
+    
     // Validate category exists
     const category = await Category.findById(categoryId);
     if (!category) {
@@ -539,12 +538,8 @@ export const getMenusByCategoryAndTable = async (req, res) => {
       .populate("category")
       .sort({ name: 1 });
 
-    console.log('Found menus:', menus.length);
-    console.log('Sample menu structure:', menus[0] ? {
-      name: menus[0].name,
-      menuTypes: menus[0].menuTypes,
-      available: menus[0].available
-    } : 'No menus found');
+   
+    
 
     // Filter and transform menus based on menu type
     const filteredMenus = menus
@@ -569,7 +564,7 @@ export const getMenusByCategoryAndTable = async (req, res) => {
         return menuObj;
       });
 
-    console.log('Filtered menus count:', filteredMenus.length);
+    
 
     // Apply pagination
     const skip = (page - 1) * limit;

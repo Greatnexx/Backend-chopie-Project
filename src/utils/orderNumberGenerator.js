@@ -1,31 +1,24 @@
 import Order from "../models/orderModel.js";
 
 /**
- * Generates a professional order number with pattern: CHO-YYYYMMDD-XXXX
- * CHO = Chopie Restaurant prefix
- * YYYYMMDD = Current date
- * XXXX = Sequential number for the day (padded to 4 digits)
+ * Generates a professional order number with pattern: LAQ-YYMMDD-XXX
+ * LAQ = Restaurant prefix
+ * YYMMDD = Current date (2-digit year)
+ * XXX = Sequential number (3 digits)
  */
 export const generateOrderNumber = async () => {
-  // Use timestamp-based approach for speed
+  // Use shorter format for mobile screens
   const now = new Date();
-  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
-  const timeStr = now.getTime().toString().slice(-6);
-  return `CHO-${dateStr}-${timeStr}`;
+  const year = now.getFullYear().toString().slice(-2);
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  const day = now.getDate().toString().padStart(2, '0');
+  const timeStr = now.getTime().toString().slice(-3);
+  return `LAQ-${year}${month}${day}-${timeStr}`;
 };
 
 /**
- * Alternative patterns you can use:
- * 
- * 1. CHO-YYYYMMDD-XXXX (Current implementation)
- *    Example: CHO-20241118-0001
- * 
- * 2. CHO-YY-MM-XXXX (Shorter year)
- *    Example: CHO-24-11-0001
- * 
- * 3. CHO-YYMMDD-TXXX (T for table-based)
- *    Example: CHO-241118-T001
- * 
- * 4. CHOP-YYYYMMDD-HHMM-XX (Include time)
- *    Example: CHOP-20241118-1430-01
+ * Example format: LAQ-241118-123
+ * - Much shorter for mobile screens
+ * - Still unique and professional
+ * - Easy to read and remember
  */
