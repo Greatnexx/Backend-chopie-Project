@@ -2,10 +2,14 @@ import mongoose from "mongoose";
 
 const orderSchema = new mongoose.Schema(
   {
+    restaurantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Restaurant",
+      required: true,
+    },
     orderNumber: {
       type: String,
       required: true,
-      unique: true,
     },
     tableNumber: {
       type: String,
@@ -74,6 +78,20 @@ const orderSchema = new mongoose.Schema(
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "RestaurantUser",
+      default: null,
+    },
+    orderSource: {
+      type: String,
+      enum: ["qr_code", "staff"],
+      default: "qr_code",
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "RestaurantUser",
+      default: null,
+    },
+    notes: {
+      type: String,
       default: null,
     },
   },

@@ -7,7 +7,8 @@
     "dev": "nodemon app.js",
     "start": "node app.js",
     "build": "npm install",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node test-isolation.js",
+    "migrate": "node migrate-to-multitenant.js",
     "test-menu": "node test-menu-simple.js",
     "test-socket": "node test-socket.js"
   },
@@ -26,6 +27,7 @@
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.16.3",
     "multer": "^2.0.2",

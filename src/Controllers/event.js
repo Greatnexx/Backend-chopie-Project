@@ -5,12 +5,16 @@ export const getEventBanners = async (req, res) => {
   try {
     const now = new Date();
     
-    // Get events that haven't ended yet (upcoming + current)
-    const events = await Event.find({
+    const query = {
       isActive: true,
       endDate: { $gte: now },
       bannerImage: { $ne: null }
-    }).sort({ startDate: 1 });
+    };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const events = await Event.find(query).sort({ startDate: 1 });
 
     res.status(200).json({
       status: true,
@@ -31,11 +35,16 @@ export const getActiveEvents = async (req, res) => {
   try {
     const now = new Date();
     
-    const activeEvents = await Event.find({
+    const query = {
       isActive: true,
       startDate: { $lte: now },
       endDate: { $gte: now }
-    }).sort({ startDate: 1 });
+    };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const activeEvents = await Event.find(query).sort({ startDate: 1 });
 
     res.status(200).json({
       status: true,
@@ -57,14 +66,18 @@ export const createEvent = async (req, res) => {
     const { title, description, startDate, endDate } = req.body;
     const bannerImage = req.file ? req.file.filename : null;
 
-    const newEvent = new Event({
+    const eventData = {
       title,
       description,
       bannerImage,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
-    });
+    };
+    if (req.restaurantId) {
+      eventData.restaurantId = req.restaurantId;
+    }
 
+    const newEvent = new Event(eventData);
     const savedEvent = await newEvent.save();
 
     res.status(201).json({
@@ -86,7 +99,12 @@ export const deleteEvent = async (req, res) => {
   try {
     const { id } = req.params;
     
-    const deletedEvent = await Event.findByIdAndDelete(id);
+    const query = { _id: id };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const deletedEvent = await Event.findOneAndDelete(query);
     
     if (!deletedEvent) {
       return res.status(404).json({
@@ -104,6 +122,33 @@ export const deleteEvent = async (req, res) => {
     res.status(500).json({
       status: false,
       message: "Failed to delete event",
+      error: error.message,
+    });
+  }
+};
+
+// Get events by restaurant ID (for customer popup)
+export const getEventsByRestaurant = async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    const now = new Date();
+    
+    // Get upcoming and current events for the restaurant
+    const events = await Event.find({
+      restaurantId: restaurantId,
+      isActive: true,
+      endDate: { $gte: now } // Events that haven't ended yet
+    }).sort({ startDate: 1 });
+
+    res.status(200).json({
+      status: true,
+      message: "Restaurant events fetched successfully",
+      data: events,
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: false,
+      message: "Failed to fetch restaurant events",
       error: error.message,
     });
   }

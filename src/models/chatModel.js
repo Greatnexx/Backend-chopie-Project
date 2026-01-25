@@ -38,10 +38,13 @@ const messageSchema = new mongoose.Schema({
 });
 
 const chatSchema = new mongoose.Schema({
+  restaurantId: {
+    type: String,
+    required: false,
+  },
   chatId: {
     type: String,
     required: true,
-    unique: true
   },
   customerName: {
     type: String,
@@ -55,8 +58,8 @@ const chatSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'closed'],
-    default: 'active'
+    enum: ['pending', 'active', 'closed'],
+    default: 'pending'
   },
   messages: [messageSchema],
   assignedStaff: {

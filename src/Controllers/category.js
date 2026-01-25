@@ -6,11 +6,26 @@ export const createCategory = async (req, res, next) => {
   try {
     const { name, image } = req.body;
 
-   
-    // Check if category already exists
-    const existingCategory = await Category.findOne({
-      name: name.toLowerCase(),
-    });
+    // Get restaurantId from tenant middleware or authenticated user
+    let restaurantId = req.restaurantId;
+    if (!restaurantId && req.user && req.user.restaurantId) {
+      restaurantId = req.user.restaurantId;
+    }
+
+    if (!restaurantId) {
+      return res.status(400).json({
+        status: false,
+        message: "Restaurant context required. Please ensure you're logged in as a restaurant user.",
+      });
+    }
+    
+    const query = { 
+      name: name.toLowerCase(),  // Match the schema's lowercase conversion
+      restaurantId: restaurantId
+    };
+
+    const existingCategory = await Category.findOne(query);
+    
     if (existingCategory) {
       return res.status(400).json({
         status: false,
@@ -18,7 +33,13 @@ export const createCategory = async (req, res, next) => {
       });
     }
 
-    const category = new Category({ name, image });
+    const categoryData = { 
+      name, 
+      image,
+      restaurantId: restaurantId
+    };
+
+    const category = new Category(categoryData);
     await category.save();
 
     res.status(201).json({
@@ -27,6 +48,14 @@ export const createCategory = async (req, res, next) => {
       data: category,
     });
   } catch (error) {
+    // Handle MongoDB duplicate key error
+    if (error.code === 11000 && error.keyPattern && error.keyPattern.name) {
+      return res.status(400).json({
+        status: false,
+        message: "Category already exists for this restaurant",
+      });
+    }
+    
     res.status(500).json({
       status: false,
       message: "Error creating category",
@@ -38,7 +67,21 @@ export const createCategory = async (req, res, next) => {
 // Get all categories
 export const getCategories = async (req, res) => {
   try {
-    const categories = await Category.find().sort({ name: 1 }).lean();
+    // Get restaurantId from tenant middleware or authenticated user
+    let restaurantId = req.restaurantId;
+    if (!restaurantId && req.user && req.user.restaurantId) {
+      restaurantId = req.user.restaurantId;
+    }
+
+    if (!restaurantId) {
+      return res.status(400).json({
+        status: false,
+        message: "Restaurant context required",
+      });
+    }
+
+    const query = { restaurantId: restaurantId };
+    const categories = await Category.find(query).sort({ name: 1 }).lean();
 
     res.status(200).json({
       status: true,
@@ -57,7 +100,12 @@ export const getCategories = async (req, res) => {
 // Get single category by ID
 export const getCategoryById = async (req, res) => {
   try {
-    const category = await Category.findById(req.params.id);
+    const query = { _id: req.params.id };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+
+    const category = await Category.findOne(query);
 
     if (!category) {
       return res.status(404).json({
@@ -85,10 +133,15 @@ export const updateCategory = async (req, res) => {
     const { name } = req.body;
     const categoryId = req.params.id;
 
-    const existingCategory = await Category.findOne({
-      name: name.toLowerCase(),
+    const existingQuery = {
+      name: name.toLowerCase(),  // Match the schema's lowercase conversion
       _id: { $ne: categoryId },
-    });
+    };
+    if (req.restaurantId) {
+      existingQuery.restaurantId = req.restaurantId;
+    }
+
+    const existingCategory = await Category.findOne(existingQuery);
 
     if (existingCategory) {
       return res.status(400).json({
@@ -97,8 +150,13 @@ export const updateCategory = async (req, res) => {
       });
     }
 
-    const category = await Category.findByIdAndUpdate(
-      categoryId,
+    const updateQuery = { _id: categoryId };
+    if (req.restaurantId) {
+      updateQuery.restaurantId = req.restaurantId;
+    }
+
+    const category = await Category.findOneAndUpdate(
+      updateQuery,
       { name },
       { new: true, runValidators: true }
     );
@@ -129,8 +187,12 @@ export const deleteCategory = async (req, res) => {
   try {
     const categoryId = req.params.id;
 
-    // Check if category has menu items
-    const menuCount = await Menu.countDocuments({ category: categoryId });
+    const menuQuery = { category: categoryId };
+    if (req.restaurantId) {
+      menuQuery.restaurantId = req.restaurantId;
+    }
+
+    const menuCount = await Menu.countDocuments(menuQuery);
     if (menuCount > 0) {
       return res.status(400).json({
         status: false,
@@ -138,7 +200,12 @@ export const deleteCategory = async (req, res) => {
       });
     }
 
-    const category = await Category.findByIdAndDelete(categoryId);
+    const deleteQuery = { _id: categoryId };
+    if (req.restaurantId) {
+      deleteQuery.restaurantId = req.restaurantId;
+    }
+
+    const category = await Category.findOneAndDelete(deleteQuery);
 
     if (!category) {
       return res.status(404).json({

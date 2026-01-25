@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const auditLogSchema = new mongoose.Schema(
   {
+    restaurantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Restaurant",
+      required: true,
+    },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "RestaurantUser",

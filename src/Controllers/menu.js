@@ -1,4 +1,3 @@
-
 import Menu from "../models/menuModel.js";
 import Category from "../models/categoryModel.js";
 import fs from 'fs';
@@ -13,27 +12,38 @@ const getMenuTypeFromTable = (tableNumber) => {
 // Create a new menu
 export const createMenu = async (req, res) => {
   try {
-    
-    
-    const { name, description, price, available, category } = req.body;
-    let { menuTypes } = req.body;
+    const { name, description, price, available, category, menuTypes } = req.body;
 
     // Parse menuTypes if it's a string (from FormData)
+    let parsedMenuTypes = menuTypes;
     if (typeof menuTypes === 'string') {
       try {
-        menuTypes = JSON.parse(menuTypes);
+        parsedMenuTypes = JSON.parse(menuTypes);
       } catch (error) {
         console.error('Error parsing menuTypes:', error);
-        menuTypes = null;
+        parsedMenuTypes = null;
       }
     }
+    // Get restaurantId from tenant middleware or authenticated user
+    let restaurantId = req.restaurantId;
+    if (!restaurantId && req.user && req.user.restaurantId) {
+      restaurantId = req.user.restaurantId;
+    }
 
-    console.log('Creating menu with data:', { name, description, price, available, category, menuTypes });
+    if (!restaurantId) {
+      return res.status(400).json({
+        success: false,
+        message: "Restaurant context required",
+      });
+    }
 
-    // Validate that category exists
-    const categoryExists = await Category.findOne({
-      _id: category,
-    });
+    // Validate category exists and belongs to restaurant
+    const categoryQuery = { _id: category };
+    if (restaurantId) {
+      categoryQuery.restaurantId = restaurantId;
+    }
+    
+    const categoryExists = await Category.findOne(categoryQuery);
     if (!categoryExists) {
       return res.status(400).json({
         success: false,
@@ -41,13 +51,13 @@ export const createMenu = async (req, res) => {
       });
     }
 
-    // Handle image upload
     let imagePath = null;
     if (req.file) {
       imagePath = `/uploads/menu-images/${req.file.filename}`;
     }
 
     const menuData = {
+      restaurantId: restaurantId,
       name,
       description,
       price,
@@ -57,16 +67,12 @@ export const createMenu = async (req, res) => {
     };
 
     // Add menuTypes if provided
-    if (menuTypes) {
-      menuData.menuTypes = menuTypes;
+    if (parsedMenuTypes) {
+      menuData.menuTypes = parsedMenuTypes;
     }
 
     const menu = new Menu(menuData);
-
     await menu.save();
-    console.log('Menu saved:', menu);
-
-    // Populate category info in response
     await menu.populate("category");
 
     res.status(201).json({
@@ -75,7 +81,6 @@ export const createMenu = async (req, res) => {
       data: menu,
     });
   } catch (error) {
-    console.error('Error creating menu:', error);
     res.status(500).json({
       success: false,
       message: "Error creating menu",
@@ -87,7 +92,6 @@ export const createMenu = async (req, res) => {
 // Get all menus
 export const getMenus = async (req, res) => {
   try {
-    // const user_id = req.user._id;
     const {
       category,
       available,
@@ -96,21 +100,15 @@ export const getMenus = async (req, res) => {
       sort = "name",
     } = req.query;
 
-    // if (!user_id) {
-    //   return res.status(401).json({
-    //     success: false,
-    //     message: "UnAuthorized",
-    //   });
-    // }
-
-    // Build filter object - only show available items by default for customers
-    // const filter = { user: user_id };
     const filter = {};
+    if (req.restaurantId) {
+      filter.restaurantId = req.restaurantId;
+    }
+    
     if (category) filter.category = category;
     if (available !== undefined) {
       filter.available = available === "true";
     } else {
-      // Default to only available items for customer-facing requests
       filter.available = true;
     }
 
@@ -154,19 +152,12 @@ export const getMenus = async (req, res) => {
 // Get single menu by ID
 export const getMenuById = async (req, res) => {
   try {
-    const user_id = req.user._id;
-
-    if (!user_id) {
-      return res.status(401).json({
-        status: false,
-        message: "UnAuthorized",
-      });
+    const query = { _id: req.params.id };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
     }
 
-    const menu = await Menu.findOne({
-      _id: req.params.id,
-      user: user_id,
-    }).populate("category");
+    const menu = await Menu.findOne(query).populate("category");
 
     if (!menu) {
       return res.status(404).json({
@@ -196,17 +187,15 @@ export const updateMenu = async (req, res) => {
     const {id} = req.params;
 
     // Parse menuTypes if it's a string (from FormData)
+    let parsedMenuTypes = menuTypes;
     if (typeof menuTypes === 'string') {
       try {
-        menuTypes = JSON.parse(menuTypes);
+        parsedMenuTypes = JSON.parse(menuTypes);
       } catch (error) {
         console.error('Error parsing menuTypes:', error);
-        menuTypes = null;
+        parsedMenuTypes = null;
       }
     }
-
-    console.log('Updating menu with data:', { name, description, price, available, category, menuTypes });
-
     // Create an object with only the fields that are defined
     const updates = {};
     const allowedFields = ["name", "description", "price", "available", "category", "menuTypes"];
@@ -222,8 +211,13 @@ export const updateMenu = async (req, res) => {
       updates.image = `/uploads/menu-images/${req.file.filename}`;
     }
 
+    const query = { _id: id };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+
     const menu = await Menu.findOneAndUpdate(
-      { _id: id },
+      query,
       updates,
       { new: true, runValidators: true }
     ).populate("category");
@@ -234,9 +228,6 @@ export const updateMenu = async (req, res) => {
         message: "Menu not found",
       });
     }
-
-    console.log('Menu updated:', menu);
-
     res.status(200).json({
       status: true,
       message: "Menu updated successfully",
@@ -256,8 +247,12 @@ export const updateMenu = async (req, res) => {
 export const deleteMenu = async (req, res) => {
   try {
     const { id } = req.params;
+    const query = { _id: id };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
 
-    const menu = await Menu.findById(id);
+    const menu = await Menu.findOne(query);
 
     if (!menu) {
       return res.status(404).json({
@@ -274,7 +269,7 @@ export const deleteMenu = async (req, res) => {
       }
     }
 
-    await Menu.findByIdAndDelete(id);
+    await Menu.findOneAndDelete(query);
 
     res.status(200).json({
       success: true,
@@ -334,10 +329,13 @@ export const getMenusByCategory = async (req, res) => {
       });
     }
 
-    // Validate category exists and belongs to user
-    const category = await Category.findOne({
-      _id: categoryId,
-    });
+    // Validate category exists and belongs to restaurant
+    const categoryQuery = { _id: categoryId };
+    if (req.restaurantId) {
+      categoryQuery.restaurantId = req.restaurantId;
+    }
+    
+    const category = await Category.findOne(categoryQuery);
     if (!category) {
       return res.status(404).json({
         status: false,
@@ -347,6 +345,10 @@ export const getMenusByCategory = async (req, res) => {
 
     // Build filter - only show available items by default for customers
     const filter = { category: categoryId };
+    if (req.restaurantId) {
+      filter.restaurantId = req.restaurantId;
+    }
+    
     if (available !== undefined) {
       filter.available = available === "true";
     } else {
@@ -399,8 +401,11 @@ export const getAllMenusForManagement = async (req, res) => {
       sort = "name",
     } = req.query;
 
-    // Build filter object - no default availability filter for management
     const filter = {};
+    if (req.restaurantId) {
+      filter.restaurantId = req.restaurantId;
+    }
+    
     if (category) filter.category = category;
     if (available !== undefined) filter.available = available === "true";
 
@@ -456,8 +461,13 @@ export const getMenusByTable = async (req, res) => {
 
     const menuType = getMenuTypeFromTable(tableNumber);
     
-    // Get all available menus and filter by menu type
-    const menus = await Menu.find({ available: true })
+    // Get all available menus and filter by menu type and restaurant
+    const filter = { available: true };
+    if (req.restaurantId) {
+      filter.restaurantId = req.restaurantId;
+    }
+    
+    const menus = await Menu.find(filter)
       .populate("category")
       .sort({ name: 1 });
 
@@ -474,8 +484,12 @@ export const getMenusByTable = async (req, res) => {
       .map(menu => {
         // Transform menu to show correct price for menu type
         const menuObj = menu.toObject();
-        if (menu.menuTypes && menu.menuTypes[menuType]) {
+        if (menu.menuTypes && menu.menuTypes[menuType] && menu.menuTypes[menuType].price) {
           menuObj.price = menu.menuTypes[menuType].price;
+        } else if (menu.price) {
+          menuObj.price = menu.price;
+        } else {
+          menuObj.price = 0;
         }
         menuObj.menuType = menuType;
         return menuObj;
@@ -510,8 +524,6 @@ export const getMenusByCategoryAndTable = async (req, res) => {
     const { categoryId, tableNumber } = req.params;
     const { page = 1, limit = 10 } = req.query;
 
-    
-
     if (!categoryId || !tableNumber) {
       return res.status(400).json({
         success: false,
@@ -521,8 +533,13 @@ export const getMenusByCategoryAndTable = async (req, res) => {
 
     const menuType = getMenuTypeFromTable(tableNumber);
     
-    // Validate category exists
-    const category = await Category.findById(categoryId);
+    // Validate category exists and belongs to restaurant
+    const categoryQuery = { _id: categoryId };
+    if (req.restaurantId) {
+      categoryQuery.restaurantId = req.restaurantId;
+    }
+    
+    const category = await Category.findOne(categoryQuery);
     if (!category) {
       return res.status(404).json({
         success: false,
@@ -530,26 +547,23 @@ export const getMenusByCategoryAndTable = async (req, res) => {
       });
     }
 
-    // Get menus for this category
-    const menus = await Menu.find({ 
+    // Get menus for this category and restaurant
+    const filter = { 
       category: categoryId, 
       available: true 
-    })
+    };
+    if (req.restaurantId) {
+      filter.restaurantId = req.restaurantId;
+    }
+    
+    const menus = await Menu.find(filter)
       .populate("category")
       .sort({ name: 1 });
-
-   
-    
 
     // Filter and transform menus based on menu type
     const filteredMenus = menus
       .filter(menu => {
-        console.log(`Checking menu ${menu.name}:`, {
-          hasMenuTypes: !!menu.menuTypes,
-          menuTypeData: menu.menuTypes?.[menuType],
-          menuTypeAvailable: menu.menuTypes?.[menuType]?.available
-        });
-        
+  
         if (menu.menuTypes && menu.menuTypes[menuType]) {
           return menu.menuTypes[menuType].available;
         }
@@ -557,14 +571,16 @@ export const getMenusByCategoryAndTable = async (req, res) => {
       })
       .map(menu => {
         const menuObj = menu.toObject();
-        if (menu.menuTypes && menu.menuTypes[menuType]) {
+        if (menu.menuTypes && menu.menuTypes[menuType] && menu.menuTypes[menuType].price) {
           menuObj.price = menu.menuTypes[menuType].price;
+        } else if (menu.price) {
+          menuObj.price = menu.price;
+        } else {
+          menuObj.price = 0;
         }
         menuObj.menuType = menuType;
         return menuObj;
       });
-
-    
 
     // Apply pagination
     const skip = (page - 1) * limit;
@@ -586,7 +602,6 @@ export const getMenusByCategoryAndTable = async (req, res) => {
       category: category.name
     });
   } catch (error) {
-    console.error('Error in getMenusByCategoryAndTable:', error);
     res.status(500).json({
       success: false,
       message: "Error fetching menus by category and table",
@@ -600,7 +615,6 @@ export const searchMenus = async (req, res) => {
   try {
     const { q, category, available, page = 1, limit = 10 } = req.query;
 
-   
     if (!q) {
       return res.status(400).json({
         status: false,
@@ -615,6 +629,11 @@ export const searchMenus = async (req, res) => {
         { description: { $regex: q, $options: "i" } },
       ],
     };
+
+    // Add restaurant filtering
+    if (req.restaurantId) {
+      filter.restaurantId = req.restaurantId;
+    }
 
     if (category) filter.category = category;
     if (available !== undefined) filter.available = available === "true";
@@ -642,6 +661,60 @@ export const searchMenus = async (req, res) => {
     res.status(500).json({
       status: false,
       message: "Error searching menus",
+      error: error.message,
+    });
+  }
+};
+
+// Delete all menus for a category
+export const deleteMenusByCategory = async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+
+    if (!categoryId) {
+      return res.status(400).json({
+        success: false,
+        message: "Category ID is required",
+      });
+    }
+
+    const query = { category: categoryId };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+
+    // Get menus to delete their images
+    const menusToDelete = await Menu.find(query);
+    
+    if (menusToDelete.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No menus found in this category",
+      });
+    }
+
+    // Delete image files
+    menusToDelete.forEach(menu => {
+      if (menu.image) {
+        const imagePath = `.${menu.image}`;
+        if (fs.existsSync(imagePath)) {
+          fs.unlinkSync(imagePath);
+        }
+      }
+    });
+
+    // Delete menus from database
+    const result = await Menu.deleteMany(query);
+
+    res.status(200).json({
+      success: true,
+      message: `${result.deletedCount} menus deleted from category successfully`,
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error deleting menus by category",
       error: error.message,
     });
   }

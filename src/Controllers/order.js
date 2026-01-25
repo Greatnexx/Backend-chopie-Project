@@ -5,39 +5,39 @@ import RejectedOrder from "../models/rejectedOrderModel.js";
 import { io } from "../../app.js";
 
 export const createOrder = async (req, res) => {
-  console.log('Order creation started:', new Date().toISOString());
   try {
     const { tableNumber, customerName, customerPhone, items, totalAmount, paymentMethod, confirmDuplicate } = req.body;
-    console.log('Request data received:', { tableNumber, customerName, itemsCount: items?.length, totalAmount, paymentMethod, confirmDuplicate });
-
     // Basic validation
     if (!tableNumber || !customerName || !items || !totalAmount || !paymentMethod) {
-      console.log('Validation failed: Missing required fields');
       return res.status(400).json({ status: false, message: "Missing required fields" });
     }
 
     if (!['cash', 'transfer'].includes(paymentMethod)) {
-      console.log('Validation failed: Invalid payment method');
       return res.status(400).json({ status: false, message: "Invalid payment method" });
     }
 
     if (!Array.isArray(items) || items.length === 0) {
-      console.log('Validation failed: Invalid items array');
       return res.status(400).json({ status: false, message: "Items array is required" });
     }
 
-    // Check for duplicate orders (within last 5 minutes)
+    // Check for duplicate orders (within last 5 minutes) - with tenant filtering
     if (!confirmDuplicate) {
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-      const existingOrder = await Order.findOne({
+      const duplicateQuery = {
         customerName,
         tableNumber,
         totalAmount,
         createdAt: { $gte: fiveMinutesAgo }
-      });
+      };
+      
+      // Add tenant filtering if available
+      if (req.restaurantId) {
+        duplicateQuery.restaurantId = req.restaurantId;
+      }
+      
+      const existingOrder = await Order.findOne(duplicateQuery);
       
       if (existingOrder) {
-        console.log('Duplicate order detected:', existingOrder.orderNumber);
         return res.status(409).json({
           status: false,
           message: "Duplicate order detected",
@@ -49,13 +49,16 @@ export const createOrder = async (req, res) => {
         });
       }
     }
-
-    console.log('Generating order number...');
-    const orderNumber = await generateOrderNumber();
-    console.log('Order number generated:', orderNumber);
+    // Get restaurant information for order number prefix
+    let restaurant = null;
+    if (req.restaurantId) {
+      const Restaurant = (await import("../models/restaurantModel.js")).default;
+      restaurant = await Restaurant.findById(req.restaurantId);
+    }
     
-    console.log('Creating order in database...');
-    const order = await Order.create({
+    const orderNumber = await generateOrderNumber(restaurant);
+    const orderData = {
+      restaurantId: req.restaurantId,
       orderNumber,
       tableNumber,
       customerName,
@@ -63,12 +66,16 @@ export const createOrder = async (req, res) => {
       items,
       totalAmount,
       paymentMethod,
-      // Remove manual date setting - let Mongoose timestamps handle it
-    });
-    console.log('Order created successfully:', order._id);
-
+    };
+    
+    // Auto-accept staff orders
+    if (req.body.orderSource === 'staff' && req.body.createdBy) {
+      orderData.status = 'accepted';
+      orderData.assignedTo = req.body.createdBy;
+    }
+    
+    const order = await Order.create(orderData);
     // Emit new order notification via Socket.IO
-    console.log('Emitting new order notification via Socket.IO...');
     io.emit('newOrder', {
       orderId: order._id,
       orderNumber,
@@ -81,8 +88,6 @@ export const createOrder = async (req, res) => {
       status: 'pending',
       createdAt: order.createdAt || new Date()
     });
-    console.log('Socket.IO notification emitted successfully');
-
     // Send response with order details for modal display
     res.status(201).json({
       status: true,
@@ -101,10 +106,7 @@ export const createOrder = async (req, res) => {
         createdAt: order.createdAt || new Date()
       }
     });
-
-    console.log('Response sent successfully');
   } catch (error) {
-    console.error('Order creation error:', error);
     res.status(500).json({
       status: false,
       message: "Failed to create order",
@@ -123,6 +125,11 @@ export const getAllOrders = async (req, res) => {
     }
 
     let query = {};
+    
+    // Add tenant filtering
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
     
     if (req.user.role === "SubUser") {
       // Get rejected order IDs for this user
@@ -162,7 +169,13 @@ export const acceptOrder = async (req, res) => {
     const userId = req.user._id;
     const ipAddress = req.ip;
 
-    const order = await Order.findById(orderId);
+    // Find order with tenant filtering
+    const query = { _id: orderId };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const order = await Order.findOne(query);
     if (!order) {
       return res.status(404).json({ status: false, message: "Order not found" });
     }
@@ -178,6 +191,7 @@ export const acceptOrder = async (req, res) => {
     ).populate("assignedTo", "name email");
 
     await AuditLog.create({
+      restaurantId: req.restaurantId || req.user.restaurantId,
       userId,
       orderId,
       action: "ACCEPT_ORDER",
@@ -199,7 +213,13 @@ export const rejectOrder = async (req, res) => {
     const userId = req.user._id;
     const ipAddress = req.ip;
 
-    const order = await Order.findById(orderId);
+    // Find order with tenant filtering
+    const query = { _id: orderId };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const order = await Order.findOne(query);
     if (!order) {
       return res.status(404).json({ status: false, message: "Order not found" });
     }
@@ -215,6 +235,7 @@ export const rejectOrder = async (req, res) => {
     await RejectedOrder.create({ userId, orderId });
 
     await AuditLog.create({
+      restaurantId: req.restaurantId || req.user.restaurantId,
       userId,
       orderId,
       action: "REJECT_ORDER",
@@ -236,7 +257,13 @@ export const updateOrderStatus = async (req, res) => {
     const userId = req.user._id;
     const ipAddress = req.ip;
 
-    const order = await Order.findById(orderId);
+    // Find order with tenant filtering
+    const query = { _id: orderId };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const order = await Order.findOne(query);
     if (!order) {
       return res.status(404).json({ status: false, message: "Order not found" });
     }
@@ -262,9 +289,8 @@ export const updateOrderStatus = async (req, res) => {
     );
 
     // Log status update (no email needed)
-    console.log(`Order ${order.orderNumber} status updated to ${nextStatus}`);
-
     await AuditLog.create({
+      restaurantId: req.restaurantId || req.user.restaurantId,
       userId,
       orderId,
       action: "UPDATE_STATUS",
@@ -285,12 +311,18 @@ export const searchOrder = async (req, res) => {
   try {
     const { searchTerm } = req.params;
     
-    // Try to find order by order number, email, or phone
-    let order = await Order.findOne({ orderNumber: searchTerm });
+    // Build base query with tenant filtering
+    const baseQuery = {};
+    if (req.restaurantId) {
+      baseQuery.restaurantId = req.restaurantId;
+    }
+    
+    // Try to find order by order number
+    let order = await Order.findOne({ ...baseQuery, orderNumber: searchTerm });
     
     if (!order) {
       // For phone searches, get the most recent order
-      order = await Order.findOne({ customerPhone: searchTerm }).sort({ createdAt: -1 });
+      order = await Order.findOne({ ...baseQuery, customerPhone: searchTerm }).sort({ createdAt: -1 });
     }
     
     if (!order) {
@@ -429,7 +461,13 @@ export const trackOrder = async (req, res) => {
   try {
     const { orderNumber } = req.params;
 
-    const order = await Order.findOne({ orderNumber });
+    // Build query with tenant filtering
+    const query = { orderNumber };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const order = await Order.findOne(query);
 
     if (!order) {
       return res.status(404).json({
@@ -565,7 +603,14 @@ export const trackOrder = async (req, res) => {
 export const getOrderById = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const order = await Order.findById(orderId);
+    
+    // Build query with tenant filtering
+    const query = { _id: orderId };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const order = await Order.findOne(query);
 
     if (!order) {
       return res.status(404).json({
@@ -588,13 +633,19 @@ export const getOrderById = async (req, res) => {
   }
 }
 
-
 // Delete order
 
 export const deleteOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const order = await Order.findById(orderId);
+    
+    // Build query with tenant filtering
+    const query = { _id: orderId };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const order = await Order.findOne(query);
 
     if (!order) {
       return res.status(404).json({
@@ -602,7 +653,7 @@ export const deleteOrder = async (req, res) => {
         message: "Order not found",
       });
     }
-    const deletedOrder = await Order.findByIdAndDelete(orderId);
+    const deletedOrder = await Order.findOneAndDelete(query);
 
     res.status(200).json({
       status: true,
@@ -627,12 +678,19 @@ export const getDailyPaymentSummary = async (req, res) => {
     const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
     const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
 
+    // Build match query with tenant filtering
+    const matchQuery = {
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
+      status: { $ne: "cancelled" }
+    };
+    
+    if (req.restaurantId) {
+      matchQuery.restaurantId = req.restaurantId;
+    }
+
     const summary = await Order.aggregate([
       {
-        $match: {
-          createdAt: { $gte: startOfDay, $lte: endOfDay },
-          status: { $ne: "cancelled" }
-        }
+        $match: matchQuery
       },
       {
         $group: {
@@ -668,5 +726,4 @@ export const getDailyPaymentSummary = async (req, res) => {
     });
   }
 };
-    
-  
+

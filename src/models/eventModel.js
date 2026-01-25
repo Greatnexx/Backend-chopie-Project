@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const eventSchema = new mongoose.Schema(
   {
+    restaurantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Restaurant",
+      required: true,
+    },
     title: {
       type: String,
       

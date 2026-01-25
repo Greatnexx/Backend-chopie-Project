@@ -7,9 +7,9 @@ const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "30d" });
 };
 
-const logAction = async (userId, action, details, ipAddress) => {
+const logAction = async (userId, action, details, ipAddress, restaurantId = null) => {
   try {
-    await AuditLog.create({ userId, action, details, ipAddress });
+    await AuditLog.create({ userId, restaurantId, action, details, ipAddress });
   } catch (error) {
     console.error("Audit log error:", error);
   }
@@ -29,7 +29,7 @@ export const loginRestaurantUser = async (req, res) => {
     }
 
     const token = generateToken(user._id);
-    await logAction(user._id, "LOGIN", "User logged in", ipAddress);
+    await logAction(user._id, "LOGIN", "User logged in", ipAddress, user.restaurantId);
 
     res.json({
       status: true,
@@ -71,17 +71,24 @@ export const createRestaurantUser = async (req, res) => {
     const { name, email, role } = req.body;
     const ipAddress = req.ip;
 
-    const existingUser = await RestaurantUser.findOne({ email });
+    // Check for existing user within the same restaurant context
+    const query = { email };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const existingUser = await RestaurantUser.findOne(query);
     if (existingUser) {
       return res.status(400).json({
         status: false,
-        message: "User already exists",
+        message: "User already exists in this restaurant",
       });
     }
 
     const generatedPassword = generatePasswordFromName(name);
     
     const user = await RestaurantUser.create({ 
+      restaurantId: req.restaurantId,
       name, 
       email, 
       password: generatedPassword, 
@@ -89,7 +96,7 @@ export const createRestaurantUser = async (req, res) => {
       isFirstLogin: true 
     });
     
-    await logAction(req.user._id, "CREATE_USER", `Created user: ${email}`, ipAddress);
+    await logAction(req.user._id, "CREATE_USER", `Created user: ${email}`, ipAddress, req.restaurantId);
 
     res.status(201).json({
       status: true,
@@ -117,7 +124,13 @@ export const getAllUsers = async (req, res) => {
       return res.status(401).json({ status: false, message: "Authentication required" });
     }
     
-    const users = await RestaurantUser.find({}).select("-password");
+    // Filter users by restaurant
+    const query = {};
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const users = await RestaurantUser.find(query).select("-password");
     
     const sanitizedUsers = users.map(user => ({
       _id: user._id,
@@ -144,8 +157,14 @@ export const toggleUserStatus = async (req, res) => {
     const { isActive } = req.body;
     const ipAddress = req.ip;
 
-    const user = await RestaurantUser.findByIdAndUpdate(
-      userId,
+    // Find user with tenant filtering
+    const query = { _id: userId };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+
+    const user = await RestaurantUser.findOneAndUpdate(
+      query,
       { isActive },
       { new: true }
     ).select("-password");
@@ -154,7 +173,8 @@ export const toggleUserStatus = async (req, res) => {
       req.user._id,
       "TOGGLE_USER_STATUS",
       `${isActive ? "Activated" : "Deactivated"} user: ${user.email}`,
-      ipAddress
+      ipAddress,
+      req.restaurantId
     );
 
     res.json({ status: true, data: user });
@@ -168,8 +188,14 @@ export const awardStar = async (req, res) => {
     const { userId } = req.params;
     const ipAddress = req.ip;
 
-    const user = await RestaurantUser.findByIdAndUpdate(
-      userId,
+    // Find user with tenant filtering
+    const query = { _id: userId };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+
+    const user = await RestaurantUser.findOneAndUpdate(
+      query,
       { $inc: { stars: 1 } },
       { new: true }
     ).select("-password");
@@ -178,7 +204,8 @@ export const awardStar = async (req, res) => {
       req.user._id,
       "AWARD_STAR",
       `Awarded star to: ${user.email}`,
-      ipAddress
+      ipAddress,
+      req.restaurantId
     );
 
     res.json({ status: true, data: user });
@@ -212,10 +239,17 @@ export const getAnalytics = async (req, res) => {
 
     const Order = (await import("../models/orderModel.js")).default;
     
-    const orders = await Order.find({
+    // Build query with tenant filtering
+    const query = {
       createdAt: { $gte: startDate },
       status: { $ne: "cancelled" }
-    });
+    };
+    
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const orders = await Order.find(query);
 
     const totalRevenue = orders.reduce((sum, order) => sum + order.totalAmount, 0);
     const completedOrders = orders.filter(o => o.status === "completed");
@@ -231,6 +265,12 @@ export const getAnalytics = async (req, res) => {
       return timeDiff < 20;
     });
 
+    // Payment method analytics
+    const cashOrders = orders.filter(o => o.paymentMethod === "cash");
+    const transferOrders = orders.filter(o => o.paymentMethod === "transfer");
+    const cashRevenue = cashOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+    const transferRevenue = transferOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+
     res.json({
       status: true,
       data: {
@@ -240,7 +280,17 @@ export const getAnalytics = async (req, res) => {
         delayedOrders: delayedOrders?.length || 0,
         fastOrders: fastOrders?.length || 0,
         avgOrderTime: avgOrderTime || 0,
-        period: period || 'day'
+        period: period || 'day',
+        paymentMethods: {
+          cash: {
+            count: cashOrders.length,
+            revenue: cashRevenue
+          },
+          transfer: {
+            count: transferOrders.length,
+            revenue: transferRevenue
+          }
+        }
       }
     });
   } catch (error) {
@@ -250,9 +300,16 @@ export const getAnalytics = async (req, res) => {
 
 export const getAuditLogs = async (req, res) => {
   try {
-    const logs = await AuditLog.find({})
+    // Build query with restaurant filtering
+    const query = {};
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+
+    const logs = await AuditLog.find(query)
       .populate("userId", "name email role")
       .populate("orderId", "orderNumber")
+      .populate("restaurantId", "name subdomain")
       .sort({ createdAt: -1 })
       .limit(100);
 
@@ -268,6 +325,12 @@ export const searchOrders = async (req, res) => {
     const Order = (await import("../models/orderModel.js")).default;
     
     let query = {};
+    
+    // Add tenant filtering
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
     if (req.user.role === "SubUser") {
       query.assignedTo = req.user._id;
     }
@@ -309,15 +372,32 @@ export const changePassword = async (req, res) => {
     user.isFirstLogin = false; // Mark as no longer first login
     await user.save();
 
-    await logAction(userId, "CHANGE_PASSWORD", "Password changed", ipAddress);
+    // Generate new token after password change
+    const token = generateToken(user._id);
 
-    res.json({ status: true, message: "Password updated successfully" });
+    await logAction(userId, "CHANGE_PASSWORD", "Password changed", ipAddress, req.user.restaurantId);
+
+    res.json({ 
+      status: true, 
+      message: "Password updated successfully",
+      data: {
+        token,
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive,
+          stars: user.stars,
+          isFirstLogin: user.isFirstLogin
+        }
+      }
+    });
   } catch (error) {
     res.status(500).json({ status: false, message: error.message });
   }
 };
 
-// New endpoint for first-time password change
 export const firstTimePasswordChange = async (req, res) => {
   try {
     const { newPassword } = req.body;
@@ -325,17 +405,10 @@ export const firstTimePasswordChange = async (req, res) => {
     const ipAddress = req.ip;
 
     const user = await RestaurantUser.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-
-    if (!user.isFirstLogin) {
+    if (!user || !user.isFirstLogin) {
       return res.status(400).json({
         status: false,
-        message: "Password has already been changed",
+        message: "Invalid request or password already changed",
       });
     }
 
@@ -343,9 +416,27 @@ export const firstTimePasswordChange = async (req, res) => {
     user.isFirstLogin = false;
     await user.save();
 
-    await logAction(userId, "FIRST_PASSWORD_CHANGE", "First-time password changed", ipAddress);
+    // Generate new token after password change
+    const token = generateToken(user._id);
 
-    res.json({ status: true, message: "Password set successfully" });
+    await logAction(userId, "FIRST_TIME_PASSWORD_CHANGE", "First time password changed", ipAddress, req.user.restaurantId);
+
+    res.json({ 
+      status: true, 
+      message: "Password set successfully",
+      data: {
+        token,
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive,
+          stars: user.stars,
+          isFirstLogin: user.isFirstLogin
+        }
+      }
+    });
   } catch (error) {
     res.status(500).json({ status: false, message: error.message });
   }
@@ -400,7 +491,7 @@ export const resetUserPassword = async (req, res) => {
     user.isFirstLogin = true;
     await user.save();
 
-    await logAction(req.user._id, "RESET_PASSWORD", `Reset password for user: ${user.email}`, ipAddress);
+    await logAction(req.user._id, "RESET_PASSWORD", `Reset password for user: ${user.email}`, ipAddress, req.restaurantId);
 
     res.json({ 
       status: true, 
@@ -436,7 +527,8 @@ export const toggleMenuAvailability = async (req, res) => {
       req.user._id,
       "TOGGLE_MENU",
       `${available ? "Enabled" : "Disabled"} menu: ${menu.name}`,
-      ipAddress
+      ipAddress,
+      req.restaurantId
     );
 
     res.json({ status: true, data: menu });
@@ -448,7 +540,14 @@ export const toggleMenuAvailability = async (req, res) => {
 export const getAllMenuItems = async (req, res) => {
   try {
     const Menu = (await import("../models/menuModel.js")).default;
-    const menus = await Menu.find({}).populate("category", "name");
+    
+    // Filter menus by restaurant
+    const query = {};
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const menus = await Menu.find(query).populate("category", "name");
     res.json({ status: true, data: menus });
   } catch (error) {
     res.status(500).json({ status: false, message: error.message });
@@ -470,7 +569,7 @@ export const deleteUser = async (req, res) => {
     }
 
     await RestaurantUser.findByIdAndDelete(userId);
-    await logAction(req.user._id, "DELETE_USER", `Deleted user: ${user.email}`, ipAddress);
+    await logAction(req.user._id, "DELETE_USER", `Deleted user: ${user.email}`, ipAddress, req.restaurantId);
 
     res.json({ status: true, message: "User deleted successfully" });
   } catch (error) {

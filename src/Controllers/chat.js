@@ -5,14 +5,22 @@ import { successResponse, errorResponse } from '../utils/responseHelper.js';
 // Create or get existing chat
 const createChat = async (req, res) => {
   try {
-    const { customerName, customerEmail, orderNumber } = req.body;
+    const { customerName, customerEmail, orderNumber, restaurantId } = req.body;
     
-    // Check if chat already exists for this order
-    let existingChat = await Chat.findOne({ 
+    const targetRestaurantId = restaurantId || req.restaurantId;
+    
+    if (!targetRestaurantId) {
+      return errorResponse(res, 400, 'Restaurant context required');
+    }
+    
+    const query = { 
       customerName, 
       orderNumber,
-      status: 'active'
-    });
+      status: 'active',
+      restaurantId: targetRestaurantId
+    };
+    
+    let existingChat = await Chat.findOne(query);
     
     if (existingChat) {
       return successResponse(res, 200, 'Chat already exists', existingChat);
@@ -20,39 +28,19 @@ const createChat = async (req, res) => {
     
     const chatId = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    const chat = new Chat({
+    const chatData = {
       chatId,
       customerName,
       customerEmail,
-      orderNumber
-    });
+      orderNumber,
+      restaurantId: targetRestaurantId,
+      status: 'pending' // Set initial status as pending
+    };
     
+    const chat = new Chat(chatData);
     await chat.save();
-    console.log('New chat created:', chatId, 'for customer:', customerName);
     
-    // Auto-assign to first available MenuManager
-    const availableStaff = await RestaurantUser.findOne({ 
-      role: 'MenuManager',
-      isActive: true 
-    });
-    
-    if (availableStaff) {
-      chat.assignedStaff = availableStaff._id;
-      await chat.save();
-      console.log('Chat assigned to MenuManager:', availableStaff.name);
-    }
-    
-    // Notify via chat hub immediately
-    if (req.chatHub) {
-      console.log('Notifying MenuManagers about new chat:', chat.chatId);
-      req.chatHub.notifyNewChat({
-        chatId: chat.chatId,
-        customerName: chat.customerName,
-        orderNumber: chat.orderNumber
-      });
-    }
-    
-    // Also emit via socket for immediate updates
+    // Only notify staff for new chats that need acceptance
     req.io.emit('newChatAvailable', {
       chatId: chat.chatId,
       customerName: chat.customerName,
@@ -61,7 +49,6 @@ const createChat = async (req, res) => {
     
     successResponse(res, 201, 'Chat created successfully', chat);
   } catch (error) {
-    console.error('Create chat error:', error);
     errorResponse(res, 500, 'Failed to create chat', error.message);
   }
 };
@@ -71,8 +58,6 @@ const sendMessage = async (req, res) => {
   try {
     const { chatId } = req.params;
     const { sender, senderType, content, messageType = 'text' } = req.body;
-    
-    console.log('API: Saving message to DB:', { chatId, sender, senderType, content });
     
     const chat = await Chat.findOne({ chatId });
     if (!chat) {
@@ -91,26 +76,16 @@ const sendMessage = async (req, res) => {
     await chat.save();
     
     const savedMessage = chat.messages[chat.messages.length - 1];
-    console.log('API: Message saved successfully:', savedMessage._id);
     
-    // Emit socket event to notify all connected clients
-    req.io.to(chatId).emit('newMessage', {
+    // Emit to chat room via ChatHub
+    req.io.to(chatId).emit('receiveMessage', {
       chatId,
-      message: savedMessage
+      message: savedMessage,
+      timestamp: new Date().toISOString()
     });
-    
-    // Also emit to all staff members for chat list updates
-    req.io.emit('chatUpdate', {
-      chatId,
-      lastMessage: savedMessage,
-      lastActivity: chat.lastActivity
-    });
-    
-    console.log('Socket events emitted for new message');
     
     successResponse(res, 200, 'Message sent', savedMessage);
   } catch (error) {
-    console.error('API: Send message error:', error);
     errorResponse(res, 500, 'Failed to send message', error.message);
   }
 };
@@ -202,26 +177,19 @@ const getChatMessages = async (req, res) => {
 // Get staff chats
 const getStaffChats = async (req, res) => {
   try {
-    console.log('Getting chats for user:', req.user.email, 'role:', req.user.role);
+    let query = { status: { $in: ['pending', 'active'] } };
     
-    let query = { status: 'active' };
-    
-    // MenuManagers can see all unassigned chats or chats assigned to them
-    if (req.user.role === 'MenuManager') {
-      query.$or = [
-        { assignedStaff: req.user._id },
-        { assignedStaff: null }
-      ];
+    // Use the restaurant's subdomain to match chats
+    if (req.restaurant && req.restaurant.subdomain) {
+      query.restaurantId = req.restaurant.subdomain;
     }
     
     const chats = await Chat.find(query)
       .populate('assignedStaff', 'name email')
       .sort({ lastActivity: -1 });
     
-    console.log('Found chats:', chats.length);
     successResponse(res, 200, 'Staff chats retrieved', chats);
   } catch (error) {
-    console.error('Get staff chats error:', error);
     errorResponse(res, 500, 'Failed to get chats', error.message);
   }
 };
@@ -250,28 +218,28 @@ const acceptChat = async (req, res) => {
     const { chatId } = req.params;
     const { staffId } = req.body;
     
-    console.log('Accepting chat:', chatId, 'by staff:', staffId);
-    
     const chat = await Chat.findOne({ chatId });
+    
     if (!chat) {
       return errorResponse(res, 404, 'Chat not found');
     }
     
-    // Assign staff to chat
+    // Only accept if not already accepted
+    if (chat.status === 'active' && chat.assignedStaff) {
+      return successResponse(res, 200, 'Chat already accepted', chat);
+    }
+    
     chat.assignedStaff = staffId;
+    chat.status = 'active';
     await chat.save();
     
-    console.log('Chat accepted and assigned to staff:', staffId);
-    
-    // Notify customer that chat was accepted
     req.io.to(chatId).emit('chatAccepted', {
       chatId,
-      staffName: req.user.name
+      staffName: req.user?.name || 'Staff Member'
     });
     
     successResponse(res, 200, 'Chat accepted successfully', chat);
   } catch (error) {
-    console.error('Accept chat error:', error);
     errorResponse(res, 500, 'Failed to accept chat', error.message);
   }
 };
@@ -286,6 +254,24 @@ const clearAllChats = async (req, res) => {
   }
 };
 
+// Test endpoint to manually trigger chat notification
+const testChatNotification = async (req, res) => {
+  try {
+    const testChatData = {
+      chatId: 'test_chat_123',
+      customerName: 'Test Customer',
+      orderNumber: 'TEST001'
+    };
+    
+    console.log('🧪 TEST: Emitting newChatAvailable event:', testChatData);
+    req.io.emit('newChatAvailable', testChatData);
+    
+    successResponse(res, 200, 'Test notification sent', testChatData);
+  } catch (error) {
+    errorResponse(res, 500, 'Failed to send test notification', error.message);
+  }
+};
+
 export {
   createChat,
   sendMessage,
@@ -295,5 +281,6 @@ export {
   getStaffChats,
   setTypingStatus,
   acceptChat,
-  clearAllChats
+  clearAllChats,
+  testChatNotification
 };

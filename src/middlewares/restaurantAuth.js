@@ -8,8 +8,6 @@ export const protect = async (req, res, next) => {
       token = req.headers.authorization.split(" ")[1];
     }
 
-    console.log('Auth header:', req.headers.authorization);
-    console.log('Token:', token ? 'Present' : 'Missing');
 
     if (!token) {
       return res.status(401).json({
@@ -19,12 +17,22 @@ export const protect = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await RestaurantUser.findById(decoded.id).select("-password");
+    const user = await RestaurantUser.findById(decoded.id)
+      .select("-password")
+      .populate('restaurantId', 'name subdomain isActive');
 
     if (!user || !user.isActive) {
       return res.status(401).json({
         status: false,
         message: "Not authorized, user not found",
+      });
+    }
+
+    // Check if user's restaurant is active
+    if (!user.restaurantId || !user.restaurantId.isActive) {
+      return res.status(401).json({
+        status: false,
+        message: "Restaurant is inactive",
       });
     }
 
@@ -35,8 +43,17 @@ export const protect = async (req, res, next) => {
       email: user.email || '',
       role: user.role || 'SubUser',
       isActive: user.isActive !== undefined ? user.isActive : true,
-      stars: user.stars || 0
+      stars: user.stars || 0,
+      isFirstLogin: user.isFirstLogin || false,
+      restaurantId: user.restaurantId._id,
+      restaurant: user.restaurantId
     };
+
+    // Set tenant context if not already set
+    if (!req.restaurantId) {
+      req.restaurantId = user.restaurantId._id;
+      req.restaurant = user.restaurantId;
+    }
 
     next();
   } catch (error) {
@@ -48,6 +65,8 @@ export const protect = async (req, res, next) => {
   }
 };
 
+export const authenticateToken = protect;
+
 export const authorize = (...roles) => {
   return (req, res, next) => {
     if (!req.user || !req.user.role || !roles.includes(req.user.role)) {
@@ -58,4 +77,15 @@ export const authorize = (...roles) => {
     }
     next();
   };
+};
+
+export const requirePasswordChange = (req, res, next) => {
+  if (req.user && req.user.isFirstLogin) {
+    return res.status(403).json({
+      status: false,
+      message: "Password change required",
+      requirePasswordChange: true
+    });
+  }
+  next();
 };

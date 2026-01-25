@@ -4,15 +4,25 @@ import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import connectDB from "./database/db.js";
+import { tenantMiddleware } from "./src/middlewares/tenantMiddleware.js";
+
+// Increase EventEmitter max listeners to prevent memory leak warnings
+process.setMaxListeners(20);
 
 import { errorHandler, notFound } from "./src/middlewares/errorMiddleware.js";
 import userRoutes from "./src/routes/userRoute.js";
 import categoryRoutes from "./src/routes/categoryRoutes.js";
-import menuRoutes from "./src/routes/menuRoutes.js"
+import menuRoutes from "./src/routes/menuRoutes.js";
 import orderRoutes from "./src/routes/orderRoute.js";
 import restaurantRoutes from "./src/routes/restaurantRoutes.js";
+import restaurantCustomizationRoutes from "./src/routes/restaurantCustomizationRoutes.js";
+import restaurantSettingsRoutes from "./src/routes/restaurantSettingsRoutes.js";
+import tenantRoutes from "./src/routes/tenantRoutes.js";
+import platformOwnerRoutes from "./src/routes/platformOwnerRoutes.js";
 import chatRoutes from "./src/routes/chatRoutes.js";
 import eventRoutes from "./src/routes/eventRoutes.js";
+import auditTrailRoutes from "./src/routes/auditTrailRoutes.js";
+import financialSettingsRoutes from "./src/routes/financialSettingsRoutes.js";
 import ChatHub from "./src/utils/chatHub.js";
 
 dotenv.config({ quiet: true });
@@ -46,7 +56,7 @@ const PORT = process.env.PORT || 8000;
 app.use(cors({
   origin: allowedOrigins,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Restaurant-ID", "X-Tenant-Subdomain"],
   credentials: true
 }));
 
@@ -54,21 +64,32 @@ app.use('/uploads', express.static('uploads'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-app.use("/api/v1", userRoutes); 
-app.use("/api/v1", categoryRoutes); 
-app.use("/api/v1", menuRoutes); 
+// Routes that don't need tenant context (before tenant middleware)
+app.use("/api/v1/platform-owner", platformOwnerRoutes);
+app.use("/api/public", (await import("./src/routes/publicRoutes.js")).default);
+app.use("/api/v1/restaurant/public", (await import("./src/routes/publicRestaurantRoutes.js")).default);
 
-app.use("/api/v1", orderRoutes);
-app.use("/api/v1", eventRoutes);
-app.use("/api/v1/restaurant", restaurantRoutes);
-
-
-
-app.use("/api/v1/chat", (req, res, next) => {
+// Chat routes with custom middleware
+app.use("/api/v1/chat", tenantMiddleware, (req, res, next) => {
   req.io = io;
   req.chatHub = chatHub;
   next();
 }, chatRoutes);
+
+// Apply tenant middleware globally for restaurant-specific routes
+app.use(tenantMiddleware);
+
+app.use("/api/v1", userRoutes); 
+app.use("/api/v1", categoryRoutes); 
+app.use("/api/v1", menuRoutes); 
+app.use("/api/v1", orderRoutes);
+app.use("/api/v1", eventRoutes);
+app.use("/api/v1", auditTrailRoutes);
+app.use("/api/v1/restaurant", restaurantRoutes);
+app.use("/api/v1/restaurant", restaurantCustomizationRoutes);
+app.use("/api/v1/restaurant", restaurantSettingsRoutes);
+app.use("/api/v1/restaurant", financialSettingsRoutes);
+app.use("/api/v1/tenant", tenantRoutes);
 
 app.get("/test", (req, res) => {
   res.send("Server is working Bro");
@@ -140,14 +161,14 @@ io.on('connection', (socket) => {
   // console.log('🌐 Client origin:', socket.handshake.headers.origin);
   
   // Handle disconnection
-  socket.on('disconnect', (reason) => {
-    console.log('❌ Socket.IO disconnection:', socket.id, 'Reason:', reason);
-  });
+  // socket.on('disconnect', (reason) => {
+  //   console.log(' Socket.IO disconnection:', socket.id, 'Reason:', reason);
+  // });
   
-  // Handle connection errors
-  socket.on('connect_error', (error) => {
-    console.error('🚨 Socket.IO connection error:', error);
-  });
+  // // Handle connection errors
+  // socket.on('connect_error', (error) => {
+  //   console.error('🚨 Socket.IO connection error:', error);
+  // });
   
   chatHub.handleConnection(socket);
 });

@@ -1,5 +1,8 @@
 import express from 'express';
 import { createOrder, deleteOrder, getAllOrders, getOrderById, trackOrder, searchOrder, getDailyPaymentSummary } from '../Controllers/order.js';
+import { tenantMiddleware, requireTenant } from '../middlewares/tenantMiddleware.js';
+import { authenticateToken } from '../middlewares/authMiddleware.js';
+import { protect as restaurantProtect } from '../middlewares/restaurantAuth.js';
 const router = express.Router();
 
 // Backward compatible updateOrder function
@@ -17,8 +20,15 @@ const updateOrder = async (req, res) => {
     }
 
     const Order = (await import('../models/orderModel.js')).default;
+    
+    // Build query with tenant filtering
+    const query = { orderNumber };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
     const updatedOrder = await Order.findOneAndUpdate(
-      { orderNumber },
+      query,
       { status },
       { new: true }
     );
@@ -57,13 +67,19 @@ router.get('/order/test', (req, res) => {
   res.json({ status: true, message: 'Order API is working', timestamp: new Date() });
 });
 
-router.post('/order', createOrder);
-router.get('/order', getAllOrders);
-router.get('/order/payment-summary', getDailyPaymentSummary);
-router.get('/order/search/:searchTerm', searchOrder);
-router.get('/order/:orderNumber/track', trackOrder);
-router.get('/order/:orderId', getOrderById);
-router.delete('/order/:orderId', deleteOrder);
-router.patch("/order/:orderNumber", updateOrder);
+// Public routes (no authentication required)
+router.post('/order', tenantMiddleware, requireTenant, createOrder);
+
+// Staff order route (requires restaurant authentication)
+router.post('/staff-order', restaurantProtect, tenantMiddleware, requireTenant, createOrder);
+router.get('/order/search/:searchTerm', tenantMiddleware, searchOrder);
+router.get('/order/:orderNumber/track', tenantMiddleware, trackOrder);
+
+// Protected routes (authentication required)
+router.get('/order', authenticateToken, tenantMiddleware, getAllOrders);
+router.get('/order/payment-summary', authenticateToken, tenantMiddleware, getDailyPaymentSummary);
+router.get('/order/:orderId', authenticateToken, tenantMiddleware, getOrderById);
+router.delete('/order/:orderId', authenticateToken, tenantMiddleware, deleteOrder);
+router.patch("/order/:orderNumber", authenticateToken, tenantMiddleware, updateOrder);
 
 export default router;
