@@ -59,7 +59,7 @@ export const getRestaurantSettings = async (req, res) => {
 // Update restaurant branding
 export const updateBranding = async (req, res) => {
   try {
-    const { primaryColor, secondaryColor, accentColor, fontFamily, theme } = req.body;
+    const { name, primaryColor, secondaryColor, accentColor, fontFamily, theme } = req.body;
     const ipAddress = req.ip;
 
     const restaurant = await Restaurant.findById(req.restaurantId);
@@ -74,6 +74,7 @@ export const updateBranding = async (req, res) => {
     if (req.file) {
       updates["branding.logo"] = `/uploads/logos/${req.file.filename}`;
     }
+    if (name) updates["branding.name"] = name;
     if (primaryColor) updates["branding.primaryColor"] = primaryColor;
     if (secondaryColor) updates["branding.secondaryColor"] = secondaryColor;
     if (accentColor) updates["branding.accentColor"] = accentColor;

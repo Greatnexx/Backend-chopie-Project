@@ -20,7 +20,7 @@ export const loginRestaurantUser = async (req, res) => {
     const { email, password } = req.body;
     const ipAddress = req.ip;
 
-    const user = await RestaurantUser.findOne({ email, isActive: true });
+    const user = await RestaurantUser.findOne({ email, isActive: true }).populate('restaurantId', 'name');
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({
         status: false,
@@ -41,6 +41,8 @@ export const loginRestaurantUser = async (req, res) => {
         isActive: user.isActive !== undefined ? user.isActive : true,
         stars: user.stars || 0,
         isFirstLogin: user.isFirstLogin || false,
+        restaurantId: user.restaurantId?._id,
+        restaurantName: user.restaurantId?.name,
         token,
       },
     });
