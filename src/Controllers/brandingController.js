@@ -5,14 +5,6 @@ export const updateBranding = async (req, res) => {
     const { restaurantId } = req.user;
     const { name, primaryColor, secondaryColor, accentColor, fontFamily } = req.body;
     
-    console.log('Branding update - File info:', {
-      hasFile: !!req.file,
-      fileName: req.file?.originalname,
-      fileSize: req.file?.size,
-      filePath: req.file?.path,
-      fieldName: req.file?.fieldname
-    });
-    
     const updateData = {
       "branding.name": name,
       "branding.primaryColor": primaryColor,
