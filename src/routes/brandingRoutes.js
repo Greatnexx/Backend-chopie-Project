@@ -1,5 +1,5 @@
 import express from "express";
-import { updateBranding, getBranding } from "../controllers/brandingController.js";
+import { updateBranding, getBranding } from "../Controllers/brandingController.js";
 import { authenticateToken } from "../middlewares/authMiddleware.js";
 import { uploadLogo } from "../middlewares/uploadMiddleware.js";
 
