@@ -5,6 +5,13 @@ export const updateBranding = async (req, res) => {
     const { restaurantId } = req.user;
     const { name, primaryColor, secondaryColor, accentColor, fontFamily } = req.body;
     
+    console.log('Update branding request:', {
+      restaurantId,
+      body: req.body,
+      hasFile: !!req.file,
+      file: req.file ? { path: req.file.path, filename: req.file.filename } : null
+    });
+    
     const updateData = {
       "branding.name": name,
       "branding.primaryColor": primaryColor,
@@ -15,6 +22,7 @@ export const updateBranding = async (req, res) => {
     
     if (req.file) {
       updateData["branding.logo"] = req.file.path;
+      console.log('Logo upload successful, path:', req.file.path);
     }
 
     const restaurant = await Restaurant.findByIdAndUpdate(
@@ -24,9 +32,12 @@ export const updateBranding = async (req, res) => {
     );
 
     if (!restaurant) {
+      console.log('Restaurant not found for ID:', restaurantId);
       return res.status(404).json({ message: "Restaurant not found" });
     }
 
+    console.log('Branding updated successfully:', restaurant.branding);
+    
     res.json({
       status: true,
       message: "Branding updated successfully",
