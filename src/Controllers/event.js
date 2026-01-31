@@ -64,15 +64,48 @@ export const getActiveEvents = async (req, res) => {
 export const createEvent = async (req, res) => {
   try {
     const { title, description, startDate, endDate } = req.body;
-    const bannerImage = req.file ? req.file.filename : null;
+    const bannerImage = req.file ? req.file.path : null; // Cloudinary URL
+
+    // Validate required fields
+    if (!bannerImage) {
+      return res.status(400).json({
+        status: false,
+        message: "Banner image is required",
+      });
+    }
+    
+    if (!startDate || !startDate.trim()) {
+      return res.status(400).json({
+        status: false,
+        message: "Start date is required",
+      });
+    }
+    
+    if (!endDate || !endDate.trim()) {
+      return res.status(400).json({
+        status: false,
+        message: "End date is required",
+      });
+    }
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (start >= end) {
+      return res.status(400).json({
+        status: false,
+        message: "End date must be after start date",
+      });
+    }
 
     const eventData = {
-      title,
-      description,
+      title: title || '',
+      description: description || '',
       bannerImage,
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
+      startDate: start,
+      endDate: end,
     };
+    
     if (req.restaurantId) {
       eventData.restaurantId = req.restaurantId;
     }
@@ -86,10 +119,10 @@ export const createEvent = async (req, res) => {
       data: savedEvent,
     });
   } catch (error) {
-    res.status(500).json({
+    console.error('Event creation error:', error);
+    res.status(400).json({
       status: false,
-      message: "Failed to create event",
-      error: error.message,
+      message: error.message || "Failed to create event",
     });
   }
 };

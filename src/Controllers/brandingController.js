@@ -3,20 +3,23 @@ import Restaurant from "../models/restaurantModel.js";
 export const updateBranding = async (req, res) => {
   try {
     const { restaurantId } = req.user;
-    const { name, logo, primaryColor, secondaryColor, accentColor, fontFamily } = req.body;
+    const { name, primaryColor, secondaryColor, accentColor, fontFamily } = req.body;
+    
+    const updateData = {
+      "branding.name": name,
+      "branding.primaryColor": primaryColor,
+      "branding.secondaryColor": secondaryColor,
+      "branding.accentColor": accentColor,
+      "branding.fontFamily": fontFamily,
+    };
+    
+    if (req.file) {
+      updateData["branding.logo"] = req.file.path;
+    }
 
     const restaurant = await Restaurant.findByIdAndUpdate(
       restaurantId,
-      {
-        $set: {
-          "branding.name": name,
-          "branding.logo": logo,
-          "branding.primaryColor": primaryColor,
-          "branding.secondaryColor": secondaryColor,
-          "branding.accentColor": accentColor,
-          "branding.fontFamily": fontFamily,
-        }
-      },
+      { $set: updateData },
       { new: true, runValidators: true }
     );
 
@@ -25,10 +28,14 @@ export const updateBranding = async (req, res) => {
     }
 
     res.json({
+      status: true,
       message: "Branding updated successfully",
-      branding: restaurant.branding
+      data: {
+        branding: restaurant.branding
+      }
     });
   } catch (error) {
+    console.error('Branding update error:', error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -37,17 +44,22 @@ export const getBranding = async (req, res) => {
   try {
     const { restaurantId } = req.user;
     
-    const restaurant = await Restaurant.findById(restaurantId).select('branding name');
+    const restaurant = await Restaurant.findById(restaurantId).select('branding name address');
     
     if (!restaurant) {
       return res.status(404).json({ message: "Restaurant not found" });
     }
 
     res.json({
-      branding: restaurant.branding,
-      restaurantName: restaurant.name
+      status: true,
+      data: {
+        branding: restaurant.branding,
+        name: restaurant.name,
+        address: restaurant.address
+      }
     });
   } catch (error) {
+    console.error('Get branding error:', error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };

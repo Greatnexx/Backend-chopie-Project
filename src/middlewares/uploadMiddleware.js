@@ -1,24 +1,4 @@
-import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-
-// Create uploads directory if it doesn't exist
-const uploadsDir = 'uploads/menu-images';
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Configure multer storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename with timestamp
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'menu-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+import { menuUpload, logoUpload, bannerUpload } from '../config/cloudinary.js';
 
 // File filter to only allow images
 const fileFilter = (req, file, cb) => {
@@ -29,17 +9,9 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Configure multer with error handling
-const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-  },
-  onError: (err, next) => {
-    console.error('Multer error:', err);
-    next(err);
-  }
-});
+// Export the configured multer uploads
+export const upload = menuUpload;
+export const uploadLogo = logoUpload;
+export const uploadBanner = bannerUpload;
 
 export default upload;

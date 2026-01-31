@@ -384,7 +384,7 @@ export const searchOrder = async (req, res) => {
                   }
                 ),
           completed: ["Preparing", "completed"].includes(order.status),
-          description: "Kitchen is preparing your order",
+          description: "Your order is being prepared",
         },
         {
           status: "completed",
@@ -400,7 +400,7 @@ export const searchOrder = async (req, res) => {
                 )
               : "",
           completed: order.status === "completed",
-          description: "Order ready and delivered to your table",
+          description: "Order is ready",
         },
       ];
 
@@ -528,7 +528,7 @@ export const trackOrder = async (req, res) => {
                   }
                 ),
           completed: ["Preparing", "completed"].includes(order.status),
-          description: "Kitchen is preparing your order",
+          description: "Your order is being prepared",
         },
         {
           status: "completed",
@@ -544,7 +544,7 @@ export const trackOrder = async (req, res) => {
                 )
               : "",
           completed: order.status === "completed",
-          description: "Order ready and delivered to your table",
+          description: "Order is ready",
         },
       ];
 

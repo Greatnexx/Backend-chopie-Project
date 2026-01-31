@@ -23,6 +23,7 @@ import chatRoutes from "./src/routes/chatRoutes.js";
 import eventRoutes from "./src/routes/eventRoutes.js";
 import auditTrailRoutes from "./src/routes/auditTrailRoutes.js";
 import financialSettingsRoutes from "./src/routes/financialSettingsRoutes.js";
+import brandingRoutes from "./src/routes/brandingRoutes.js";
 import ChatHub from "./src/utils/chatHub.js";
 
 dotenv.config({ quiet: true });
@@ -54,13 +55,13 @@ export { chatHub };
 const PORT = process.env.PORT || 8000;
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin: true, // Allow all origins for testing
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Restaurant-ID", "X-Tenant-Subdomain"],
   credentials: true
 }));
 
-app.use('/uploads', express.static('uploads'));
+// app.use('/uploads', express.static('uploads')); // Removed - using Cloudinary now
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -89,6 +90,7 @@ app.use("/api/v1/restaurant", restaurantRoutes);
 app.use("/api/v1/restaurant", restaurantCustomizationRoutes);
 app.use("/api/v1/restaurant", restaurantSettingsRoutes);
 app.use("/api/v1/restaurant", financialSettingsRoutes);
+app.use("/api/v1/restaurant", brandingRoutes);
 app.use("/api/v1/tenant", tenantRoutes);
 
 app.get("/test", (req, res) => {

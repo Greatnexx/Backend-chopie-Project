@@ -1,6 +1,6 @@
 import Menu from "../models/menuModel.js";
 import Category from "../models/categoryModel.js";
-import fs from 'fs';
+import cloudinary from '../config/cloudinary.js';
 
 // Utility function to determine menu type from table number
 const getMenuTypeFromTable = (tableNumber) => {
@@ -53,7 +53,7 @@ export const createMenu = async (req, res) => {
 
     let imagePath = null;
     if (req.file) {
-      imagePath = `/uploads/menu-images/${req.file.filename}`;
+      imagePath = req.file.path; // Cloudinary URL
     }
 
     const menuData = {
@@ -196,9 +196,10 @@ export const updateMenu = async (req, res) => {
         parsedMenuTypes = null;
       }
     }
+    
     // Create an object with only the fields that are defined
     const updates = {};
-    const allowedFields = ["name", "description", "price", "available", "category", "menuTypes"];
+    const allowedFields = ["name", "description", "price", "available", "category"];
 
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) {
@@ -206,9 +207,14 @@ export const updateMenu = async (req, res) => {
       }
     });
 
+    // Handle menuTypes separately
+    if (parsedMenuTypes !== undefined) {
+      updates.menuTypes = parsedMenuTypes;
+    }
+
     // Handle image upload if new file is provided
     if (req.file) {
-      updates.image = `/uploads/menu-images/${req.file.filename}`;
+      updates.image = req.file.path; // Cloudinary URL
     }
 
     const query = { _id: id };
@@ -261,11 +267,14 @@ export const deleteMenu = async (req, res) => {
       });
     }
 
-    // Delete image file if exists
+    // Delete image from Cloudinary if exists
     if (menu.image) {
-      const imagePath = `.${menu.image}`;
-      if (fs.existsSync(imagePath)) {
-        fs.unlinkSync(imagePath);
+      try {
+        // Extract public_id from Cloudinary URL
+        const publicId = menu.image.split('/').pop().split('.')[0];
+        await cloudinary.uploader.destroy(`chopie/menu-images/${publicId}`);
+      } catch (error) {
+        console.error('Error deleting image from Cloudinary:', error);
       }
     }
 
@@ -693,15 +702,17 @@ export const deleteMenusByCategory = async (req, res) => {
       });
     }
 
-    // Delete image files
-    menusToDelete.forEach(menu => {
+    // Delete images from Cloudinary
+    for (const menu of menusToDelete) {
       if (menu.image) {
-        const imagePath = `.${menu.image}`;
-        if (fs.existsSync(imagePath)) {
-          fs.unlinkSync(imagePath);
+        try {
+          const publicId = menu.image.split('/').pop().split('.')[0];
+          await cloudinary.uploader.destroy(`chopie/menu-images/${publicId}`);
+        } catch (error) {
+          console.error('Error deleting image from Cloudinary:', error);
         }
       }
-    });
+    }
 
     // Delete menus from database
     const result = await Menu.deleteMany(query);
