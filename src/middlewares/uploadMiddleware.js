@@ -1,6 +1,5 @@
-import { menuUpload, logoUpload, bannerUpload } from '../config/cloudinary.js';
+import { logoUpload } from '../config/cloudinary.js';
 
-// File filter to only allow images
 const fileFilter = (req, file, cb) => {
   if (file.mimetype.startsWith('image/')) {
     cb(null, true);
@@ -9,9 +8,4 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Export the configured multer uploads
-export const upload = menuUpload;
 export const uploadLogo = logoUpload;
-export const uploadBanner = bannerUpload;
-
-export default upload;
