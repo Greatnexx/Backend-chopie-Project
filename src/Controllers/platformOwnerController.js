@@ -435,8 +435,7 @@ export const getRestaurantDetails = async (req, res) => {
     // Recent orders
     const recentOrders = await Order.find({ restaurantId: restaurant._id })
       .sort({ createdAt: -1 })
-      .limit(10)
-      .populate('userId', 'name email');
+      .limit(10);
 
     // Monthly revenue trend
     const monthlyRevenue = await Order.aggregate([
