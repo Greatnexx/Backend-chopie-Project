@@ -2,8 +2,10 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import Restaurant from '../models/restaurantModel.js';
-import RestaurantUser from '../models/restaurantUserModel.js';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
+import { registerRestaurant } from '../Controllers/tenantController.js';
+
+
 
 const router = express.Router();
 
@@ -35,66 +37,7 @@ const upload = multer({
 });
 
 // Register new restaurant tenant
-router.post('/register', async (req, res) => {
-  try {
-    const { name, email, phone, address, subdomain } = req.body;
-
-    // Check if subdomain is already taken
-    const existingRestaurant = await Restaurant.findOne({ 
-      $or: [{ subdomain: subdomain.toLowerCase() }, { email }] 
-    });
-    
-    if (existingRestaurant) {
-      return res.status(400).json({
-        status: false,
-        message: existingRestaurant.email === email ? 'Email already registered' : 'Subdomain not available'
-      });
-    }
-
-    // Create restaurant (active for immediate use)
-    const restaurant = await Restaurant.create({
-      name,
-      email,
-      phone,
-      address,
-      subdomain: subdomain.toLowerCase(),
-      isActive: true
-    });
-
-    // Create default admin user using restaurant name for password
-    const defaultPassword = name.split(' ').pop().toUpperCase();
-    const admin = await RestaurantUser.create({
-      restaurantId: restaurant._id,
-      name: 'Restaurant Admin',
-      email: email,
-      password: defaultPassword,
-      role: 'Admin',
-      isFirstLogin: true
-    });
-
-    res.status(201).json({
-      status: true,
-      message: 'Restaurant registered successfully!',
-      data: {
-        restaurant: {
-          id: restaurant._id,
-          name: restaurant.name,
-          subdomain: restaurant.subdomain
-        },
-        loginCredentials: {
-          email: email,
-          password: defaultPassword
-        }
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: false,
-      message: 'Registration failed',
-      error: error.message
-    });
-  }
-});
+router.post('/register', registerRestaurant);
 
 // Resolve tenant by subdomain or identifier
 router.get('/resolve/:identifier', async (req, res) => {
@@ -318,20 +261,6 @@ router.put('/admin/restaurants/:id/status', authenticateToken, async (req, res) 
         status: false,
         message: 'Restaurant not found'
       });
-    }
-
-    // If approving, also activate the restaurant owner
-    if (isActive) {
-      await RestaurantUser.updateMany(
-        { restaurantId: id, role: 'SuperAdmin' },
-        { isActive: true }
-      );
-    } else {
-      // If rejecting, deactivate all users
-      await RestaurantUser.updateMany(
-        { restaurantId: id },
-        { isActive: false }
-      );
     }
 
     res.json({

@@ -19,6 +19,9 @@ export const registerRestaurant = async (req, res) => {
       });
     }
 
+    // Clean up any existing restaurant users with this email
+    await RestaurantUser.deleteMany({ email });
+
     // Create restaurant
     const restaurant = await Restaurant.create({
       name,
@@ -26,7 +29,7 @@ export const registerRestaurant = async (req, res) => {
       phone,
       address,
       subdomain: subdomain.toLowerCase(),
-      isActive: true // Auto-approve for now
+      isActive: true
     });
 
     // Create default admin user using restaurant name for password
@@ -39,6 +42,51 @@ export const registerRestaurant = async (req, res) => {
       role: "SuperAdmin",
       isFirstLogin: true
     });
+
+    
+
+    // Send data to Airtable for email automation
+    try {
+      
+      const airtableData = {
+        "Restaurant Name": restaurant.name,
+        "Email": restaurant.email,
+        "Phone": restaurant.phone || '',
+        "Address": restaurant.address || '',
+        "Subdomain": restaurant.subdomain,
+        "Password": defaultPassword,
+        "Menu URL": `${process.env.PROD_FRONTEND_URL}/r/${restaurant.subdomain}`,
+        "Dashboard URL": `${process.env.PROD_FRONTEND_URL}/restaurant/login`
+        
+      };
+      
+
+      const airtableUrl = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Restaurants`;
+      
+      const response = await fetch(airtableUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.AIRTABLE_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          records: [{ fields: airtableData }]
+        })
+      });
+      
+      const responseData = await response.json();
+      console.log('📤 Airtable response status:', response.status);
+      console.log('📤 Airtable response:', responseData);
+      
+      if (response.ok) {
+        console.log('✅ Restaurant data sent to Airtable successfully');
+      } else {
+        console.error('❌ Airtable API error:', responseData);
+      }
+    } catch (airtableError) {
+      console.error('Failed to send to Airtable:', airtableError.message);
+      console.error('Full error:', airtableError);
+    }
 
     res.status(201).json({
       status: true,
