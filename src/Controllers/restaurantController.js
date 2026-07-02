@@ -5,7 +5,14 @@ import { generateToken } from "../utils/generateToken.js";
 // Restaurant Registration (Public)
 export const registerRestaurant = async (req, res) => {
   try {
-    const { name, email, phone, address, subdomain, ownerName } = req.body;
+    const { name, email, phone, address, subdomain, ownerName, password } = req.body;
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({
+        status: false,
+        message: "Password must be at least 6 characters",
+      });
+    }
 
     // Check if restaurant already exists
     const existingRestaurant = await Restaurant.findOne({
@@ -31,11 +38,11 @@ export const registerRestaurant = async (req, res) => {
     // Create default super admin user
     const adminUser = await RestaurantUser.create({
       restaurantId: restaurant._id,
-      name: ownerName,
-      email: email, // Use the restaurant email for the admin user
-      password: "ADMIN123", // Default password
+      name: ownerName || name,
+      email: email,
+      password,
       role: "SuperAdmin",
-      isFirstLogin: true,
+      isFirstLogin: false,
     });
 
     const token = generateToken(adminUser._id);

@@ -5,7 +5,14 @@ import jwt from "jsonwebtoken";
 // Restaurant registration/onboarding
 export const registerRestaurant = async (req, res) => {
   try {
-    const { name, email, phone, address, subdomain } = req.body;
+    const { name, email, phone, address, subdomain, ownerName, password } = req.body;
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({
+        status: false,
+        message: "Password must be at least 6 characters"
+      });
+    }
 
     // Check if subdomain is available
     const existingRestaurant = await Restaurant.findOne({ 
@@ -32,32 +39,26 @@ export const registerRestaurant = async (req, res) => {
       isActive: true
     });
 
-    // Create default admin user using restaurant name for password
-    const defaultPassword = name.split(' ').pop().toUpperCase();
+    // Create default admin user
     const admin = await RestaurantUser.create({
       restaurantId: restaurant._id,
-      name: "Restaurant Admin",
+      name: ownerName || name,
       email: email,
-      password: defaultPassword,
+      password: password,
       role: "SuperAdmin",
-      isFirstLogin: true
+      isFirstLogin: false
     });
-
-    
 
     // Send data to Airtable for email automation
     try {
-      
       const airtableData = {
         "Restaurant Name": restaurant.name,
         "Email": restaurant.email,
         "Phone": restaurant.phone || '',
         "Address": restaurant.address || '',
         "Subdomain": restaurant.subdomain,
-        "Password": defaultPassword,
-        "Menu URL": `${process.env.PROD_FRONTEND_URL}/r/${restaurant.subdomain}`,
+        "Menu URL": `https://${restaurant.subdomain}.chopie-resturant-frontend.vercel.app`,
         "Dashboard URL": `${process.env.PROD_FRONTEND_URL}/restaurant/login`
-        
       };
       
 
@@ -75,8 +76,7 @@ export const registerRestaurant = async (req, res) => {
       });
       
       const responseData = await response.json();
-      console.log('📤 Airtable response status:', response.status);
-      console.log('📤 Airtable response:', responseData);
+     
       
       if (response.ok) {
         console.log('✅ Restaurant data sent to Airtable successfully');
@@ -96,10 +96,6 @@ export const registerRestaurant = async (req, res) => {
           id: restaurant._id,
           name: restaurant.name,
           subdomain: restaurant.subdomain
-        },
-        loginCredentials: {
-          email: email,
-          password: defaultPassword
         }
       }
     });

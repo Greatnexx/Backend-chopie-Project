@@ -251,6 +251,126 @@ export const rejectOrder = async (req, res) => {
   }
 };
 
+export const updateOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { items, totalAmount, customerNotes } = req.body;
+    const userId = req.user._id;
+    const ipAddress = req.ip;
+
+    // Find order with tenant filtering
+    const query = { _id: orderId };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const order = await Order.findOne(query);
+    if (!order) {
+      return res.status(404).json({ status: false, message: "Order not found" });
+    }
+
+    // Only allow modification if order is accepted or preparing (not completed/cancelled)
+    if (!['accepted', 'Preparing'].includes(order.status)) {
+      return res.status(400).json({ 
+        status: false, 
+        message: `Cannot modify order with status: ${order.status}` 
+      });
+    }
+
+    // Store original order for audit
+    const originalItems = order.items;
+    const originalTotal = order.totalAmount;
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      { 
+        items, 
+        totalAmount, 
+        customerNotes: customerNotes || order.customerNotes,
+        lastModified: new Date(),
+        modifiedBy: userId
+      },
+      { new: true }
+    ).populate("assignedTo", "name email");
+
+    await AuditLog.create({
+      restaurantId: req.restaurantId || req.user.restaurantId,
+      userId,
+      orderId,
+      action: "MODIFY_ORDER",
+      details: `Modified order ${order.orderNumber}. Items: ${originalItems.length} → ${items.length}, Total: ${originalTotal} → ${totalAmount}`,
+      ipAddress,
+    });
+
+    io.emit('orderModified', { 
+      orderId, 
+      modifiedBy: req.user.name,
+      newTotal: totalAmount 
+    });
+
+    res.json({ status: true, data: updatedOrder });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+export const cancelOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { reason } = req.body;
+    const userId = req.user._id;
+    const ipAddress = req.ip;
+
+    // Find order with tenant filtering
+    const query = { _id: orderId };
+    if (req.restaurantId) {
+      query.restaurantId = req.restaurantId;
+    }
+    
+    const order = await Order.findOne(query);
+    if (!order) {
+      return res.status(404).json({ status: false, message: "Order not found" });
+    }
+
+    // Only allow cancellation if order is not completed
+    if (order.status === 'completed') {
+      return res.status(400).json({ 
+        status: false, 
+        message: "Cannot cancel completed order" 
+      });
+    }
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      { 
+        status: "cancelled",
+        cancellationReason: reason,
+        cancelledBy: userId,
+        cancelledAt: new Date()
+      },
+      { new: true }
+    );
+
+    await AuditLog.create({
+      restaurantId: req.restaurantId || req.user.restaurantId,
+      userId,
+      orderId,
+      action: "CANCEL_ORDER",
+      details: `Cancelled order ${order.orderNumber}. Reason: ${reason || 'No reason provided'}`,
+      ipAddress,
+    });
+
+    io.emit('orderCancelled', { 
+      orderId, 
+      cancelledBy: req.user.name,
+      reason 
+    });
+
+    res.json({ status: true, data: updatedOrder });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
+};
 export const updateOrderStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -317,19 +437,27 @@ export const searchOrder = async (req, res) => {
       baseQuery.restaurantId = req.restaurantId;
     }
     
-    // Try to find order by order number
+    // Try to find order by order number first
     let order = await Order.findOne({ ...baseQuery, orderNumber: searchTerm });
     
     if (!order) {
-      // For phone searches, get the most recent order
+      // Try to find by phone number (get most recent)
       order = await Order.findOne({ ...baseQuery, customerPhone: searchTerm }).sort({ createdAt: -1 });
+    }
+    
+    if (!order) {
+      // Try to find by customer name (case-insensitive, get most recent)
+      order = await Order.findOne({ 
+        ...baseQuery, 
+        customerName: { $regex: searchTerm, $options: 'i' } 
+      }).sort({ createdAt: -1 });
     }
     
     if (!order) {
       return res.status(404).json({
         status: false,
         message:
-          "Order not found. Please check your order number or phone number and try again.",
+          "Order not found. Please check your order number, phone number, or customer name and try again.",
       });
     }
 

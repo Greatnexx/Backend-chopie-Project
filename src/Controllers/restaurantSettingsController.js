@@ -18,6 +18,7 @@ export const getRestaurantSettings = async (req, res) => {
         allowOnlineOrdering: restaurant.settings?.allowOnlineOrdering ?? true,
         requireTableNumber: restaurant.settings?.requireTableNumber ?? true,
         enableVipTables: restaurant.settings?.enableVipTables ?? true,
+        subdomain: restaurant.subdomain,
         operatingHours: restaurant.operatingHours || {
           monday: { open: '09:00', close: '22:00', closed: false },
           tuesday: { open: '09:00', close: '22:00', closed: false },

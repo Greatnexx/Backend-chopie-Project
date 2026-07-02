@@ -252,9 +252,10 @@ export const getAnalytics = async (req, res) => {
     }
     
     const orders = await Order.find(query);
-
-    const totalRevenue = orders.reduce((sum, order) => sum + order.totalAmount, 0);
     const completedOrders = orders.filter(o => o.status === "completed");
+
+    // Only count revenue from completed orders
+    const totalRevenue = completedOrders.reduce((sum, order) => sum + order.totalAmount, 0);
     const avgOrderTime = 25; // minutes - you can calculate this based on timestamps
     
     const delayedOrders = orders.filter(o => {
@@ -267,9 +268,9 @@ export const getAnalytics = async (req, res) => {
       return timeDiff < 20;
     });
 
-    // Payment method analytics
-    const cashOrders = orders.filter(o => o.paymentMethod === "cash");
-    const transferOrders = orders.filter(o => o.paymentMethod === "transfer");
+    // Payment method analytics - only from completed orders
+    const cashOrders = completedOrders.filter(o => o.paymentMethod === "cash");
+    const transferOrders = completedOrders.filter(o => o.paymentMethod === "transfer");
     const cashRevenue = cashOrders.reduce((sum, order) => sum + order.totalAmount, 0);
     const transferRevenue = transferOrders.reduce((sum, order) => sum + order.totalAmount, 0);
 
@@ -302,20 +303,33 @@ export const getAnalytics = async (req, res) => {
 
 export const getAuditLogs = async (req, res) => {
   try {
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
     // Build query with restaurant filtering
     const query = {};
     if (req.restaurantId) {
       query.restaurantId = req.restaurantId;
     }
 
+    // Get total count for pagination
+    const total = await AuditLog.countDocuments(query);
+
     const logs = await AuditLog.find(query)
       .populate("userId", "name email role")
       .populate("orderId", "orderNumber")
       .populate("restaurantId", "name subdomain")
       .sort({ createdAt: -1 })
-      .limit(100);
+      .skip(skip)
+      .limit(parseInt(limit));
 
-    res.json({ status: true, data: logs });
+    res.json({ 
+      status: true, 
+      data: logs,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / parseInt(limit))
+    });
   } catch (error) {
     res.status(500).json({ status: false, message: error.message });
   }

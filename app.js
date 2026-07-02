@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import connectDB from "./database/db.js";
+import { detectSubdomain } from "./src/middlewares/subdomainDetection.js";
 import { tenantMiddleware } from "./src/middlewares/tenantMiddleware.js";
 
 // Increase EventEmitter max listeners to prevent memory leak warnings
@@ -31,12 +32,25 @@ connectDB();
 
 
 // Define allowed origins for both Express and Socket.IO
-const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  process.env.PROD_FRONTEND_URL
-  
-  
-].filter(Boolean); // Remove undefined values
+const allowedOrigins = (origin, callback) => {
+  // Allow all localhost subdomains in development
+  if (!origin || origin.includes('localhost') || origin.includes('127.0.0.1')) {
+    return callback(null, true);
+  }
+  // Allow production origins
+  const productionOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.PROD_FRONTEND_URL,
+  ].filter(Boolean);
+
+  if (
+    productionOrigins.includes(origin) ||
+    /^https:\/\/[a-zA-Z0-9-]+\.chopie-resturant-frontend\.vercel\.app$/.test(origin)
+  ) {
+    return callback(null, true);
+  }
+  callback(new Error('Not allowed by CORS'));
+};
 
 const app = express();
 const server = createServer(app);
@@ -55,7 +69,7 @@ export { chatHub };
 const PORT = process.env.PORT || 8000;
 
 app.use(cors({
-  origin: true, // Allow all origins for testing
+  origin: allowedOrigins,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Restaurant-ID", "X-Tenant-Subdomain"],
   credentials: true
@@ -77,7 +91,8 @@ app.use("/api/v1/chat", tenantMiddleware, (req, res, next) => {
   next();
 }, chatRoutes);
 
-// Apply tenant middleware globally for restaurant-specific routes
+// Apply subdomain detection and tenant middleware
+app.use(detectSubdomain);
 app.use(tenantMiddleware);
 
 app.use("/api/v1", userRoutes); 
