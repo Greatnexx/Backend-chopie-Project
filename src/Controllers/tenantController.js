@@ -57,7 +57,7 @@ export const registerRestaurant = async (req, res) => {
         "Phone": restaurant.phone || '',
         "Address": restaurant.address || '',
         "Subdomain": restaurant.subdomain,
-        "Menu URL": `${process.env.PROD_FRONTEND_URL}/menu/${restaurant.subdomain}`,
+        "Menu URL": `https://${restaurant.subdomain}.chopie-resturant-frontend.vercel.app`,
         "Dashboard URL": `${process.env.PROD_FRONTEND_URL}/restaurant/login`
       };
       
