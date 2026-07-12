@@ -4,22 +4,37 @@ export const tenantMiddleware = async (req, res, next) => {
   try {
     let restaurantId = null;
 
-    // Method 1: Get from subdomain in hostname
-    const host = req.get('host') || req.headers.host;
-    if (host) {
-      const subdomain = host.split('.')[0];
-      if (subdomain && subdomain !== 'localhost' && subdomain !== '127') {
-        const restaurant = await Restaurant.findOne({ 
-          subdomain: subdomain.toLowerCase(),
-          isActive: true 
-        });
-        if (restaurant) {
-          restaurantId = restaurant._id;
+    // Method 1: Get from X-Tenant-Subdomain header (highest priority for path-based routing)
+    if (!restaurantId && req.headers['x-tenant-subdomain']) {
+      const subdomain = req.headers['x-tenant-subdomain'];
+      const restaurant = await Restaurant.findOne({ 
+        subdomain: subdomain.toLowerCase(),
+        isActive: true 
+      });
+      if (restaurant) {
+        restaurantId = restaurant._id;
+      }
+    }
+
+    // Method 2: Get from subdomain in hostname
+    if (!restaurantId) {
+      const host = req.get('host') || req.headers.host;
+      if (host) {
+        const subdomain = host.split('.')[0];
+        const knownBackendHosts = ['backend-chopie-project', 'localhost', '127', 'api', 'www'];
+        if (subdomain && !knownBackendHosts.includes(subdomain)) {
+          const restaurant = await Restaurant.findOne({ 
+            subdomain: subdomain.toLowerCase(),
+            isActive: true 
+          });
+          if (restaurant) {
+            restaurantId = restaurant._id;
+          }
         }
       }
     }
 
-    // Method 2: Get from URL path (e.g., /r/danny)
+    // Method 3: Get from URL path (e.g., /r/danny)
     if (!restaurantId && req.path) {
       const pathMatch = req.path.match(/^\/r\/([^/]+)/);
       if (pathMatch) {
@@ -31,18 +46,6 @@ export const tenantMiddleware = async (req, res, next) => {
         if (restaurant) {
           restaurantId = restaurant._id;
         }
-      }
-    }
-
-    // Method 3: Get from X-Tenant-Subdomain header (from frontend)
-    if (!restaurantId && req.headers['x-tenant-subdomain']) {
-      const subdomain = req.headers['x-tenant-subdomain'];
-      const restaurant = await Restaurant.findOne({ 
-        subdomain: subdomain.toLowerCase(),
-        isActive: true 
-      });
-      if (restaurant) {
-        restaurantId = restaurant._id;
       }
     }
 
