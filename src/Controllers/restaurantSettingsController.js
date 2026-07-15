@@ -142,12 +142,22 @@ export const getRestaurantPublicInfo = async (req, res) => {
     const now = new Date();
     const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const currentDay = days[now.getDay()];
+    const prevDay = days[(now.getDay() + 6) % 7];
     const currentTime = now.toTimeString().substring(0, 5); // HH:MM format
 
+    const checkOpen = (hours, time) => {
+      if (!hours || hours.closed) return false;
+      const overnight = hours.close <= hours.open; // e.g. 23:00 - 04:00
+      if (overnight) return time >= hours.open || time < hours.close;
+      return time >= hours.open && time < hours.close;
+    };
+
     const todayHours = restaurant.operatingHours?.[currentDay];
-    const isOpen = todayHours && !todayHours.closed && 
-                   currentTime >= todayHours.open && 
-                   currentTime < todayHours.close;
+    const prevHours = restaurant.operatingHours?.[prevDay];
+
+    // Open if today's hours match, OR if yesterday was overnight and we're still in that window
+    const isOpen = checkOpen(todayHours, currentTime) ||
+                   (prevHours && !prevHours.closed && prevHours.close <= prevHours.open && currentTime < prevHours.close);
 
     res.json({
       status: true,

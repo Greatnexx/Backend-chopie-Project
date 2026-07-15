@@ -1,5 +1,5 @@
 import express from 'express';
-import { loginRestaurantUser, createRestaurantUser, getAllUsers, toggleUserStatus, awardStar, getAnalytics, getAuditLogs, searchOrders, changePassword, firstTimePasswordChange, getUserCredentials, resetUserPassword, toggleMenuAvailability, getAllMenuItems, deleteUser } from '../Controllers/restaurantAuth.js';
+import { loginRestaurantUser, createRestaurantUser, getAllUsers, toggleUserStatus, awardStar, getAnalytics, getAuditLogs, searchOrders, changePassword, firstTimePasswordChange, getUserCredentials, resetUserPassword, toggleMenuAvailability, getAllMenuItems, deleteUser, forgotPassword, resetPassword } from '../Controllers/restaurantAuth.js';
 import { registerRestaurant } from '../Controllers/tenantController.js';
 import { acceptOrder, rejectOrder, updateOrderStatus, getAllOrders, getOrderById } from '../Controllers/order.js';
 import { createCategory, getCategories } from '../Controllers/category.js';
@@ -11,6 +11,8 @@ const router = express.Router();
 // Auth routes
 router.post('/register', registerRestaurant);
 router.post('/login', loginRestaurantUser);
+router.post('/forgot-password', forgotPassword);
+router.patch('/reset-password/:token', resetPassword);
 router.post('/users', protect, tenantMiddleware, authorize('SuperAdmin'), createRestaurantUser);
 router.get('/users', protect, tenantMiddleware, authorize('SuperAdmin'), getAllUsers);
 router.patch('/users/:userId/status', protect, tenantMiddleware, authorize('SuperAdmin'), toggleUserStatus);
