@@ -1,6 +1,9 @@
 import RestaurantUser from "../models/restaurantUserModel.js";
 import AuditLog from "../models/auditLogModel.js";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
+import nodemailer from "nodemailer";
+import { EMAIL_TEMPLATES, sendTemplateEmail } from "../utils/email.js";
 
 
 const generateToken = (id) => {
@@ -58,9 +61,8 @@ export const loginRestaurantUser = async (req, res) => {
 // Helper function to generate password from name
 const generatePasswordFromName = (fullName) => {
   const nameParts = fullName.trim().split(' ');
-  // Use the last name (surname) or first name if only one name provided
   const surname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0];
-  return surname.toUpperCase();
+  return surname.charAt(0).toUpperCase() + surname.slice(1).toLowerCase();
 };
 
 // Helper function to get the default password for display (only for first-time users)
@@ -218,32 +220,39 @@ export const awardStar = async (req, res) => {
 
 export const getAnalytics = async (req, res) => {
   try {
-    const { period = "day" } = req.query;
+    const { period = "day", startDate: startParam, endDate: endParam } = req.query;
     const now = new Date();
     let startDate;
+    let endDate = now;
 
-    switch (period) {
-      case "day":
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        break;
-      case "week":
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case "month":
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case "year":
-        startDate = new Date(now.getFullYear(), 0, 1);
-        break;
-      default:
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (startParam && endParam) {
+      startDate = new Date(startParam);
+      endDate = new Date(endParam);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      switch (period) {
+        case "day":
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case "week":
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case "month":
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        case "year":
+          startDate = new Date(now.getFullYear(), 0, 1);
+          break;
+        default:
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      }
     }
 
     const Order = (await import("../models/orderModel.js")).default;
     
     // Build query with tenant filtering
     const query = {
-      createdAt: { $gte: startDate },
+      createdAt: { $gte: startDate, $lte: endDate },
       status: { $ne: "cancelled" }
     };
     
@@ -519,6 +528,60 @@ export const resetUserPassword = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ status: false, message: error.message });
+  }
+};
+
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await RestaurantUser.findOne({ email: email.toLowerCase(), isActive: true });
+    if (!user) {
+      return res.status(404).json({ status: false, message: "No account found with that email" });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    user.resetPasswordExpires = Date.now() + 30 * 60 * 1000; // 30 minutes
+    await user.save({ validateBeforeSave: false });
+
+    const resetUrl = `${process.env.FRONTEND_URL}/restaurant/reset-password/${resetToken}`;
+
+    
+  sendTemplateEmail({ email: user.email, name: user.name},
+   EMAIL_TEMPLATES.PASSWORD_RESET,  {name:user.name,resetUrl} )
+
+    res.json({ status: true, message: "Password reset link sent to your email" });
+  } catch (error) {
+    res.status(500).json({ status: false, message: "Failed to send reset email", error: error.message });
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { newPassword } = req.body;
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await RestaurantUser.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ status: false, message: "Reset link is invalid or has expired" });
+    }
+
+    user.password = newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    user.isFirstLogin = false;
+    await user.save();
+
+    res.json({ status: true, message: "Password reset successfully. You can now log in." });
+  } catch (error) {
+    res.status(500).json({ status: false, message: "Failed to reset password", error: error.message });
   }
 };
 

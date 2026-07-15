@@ -1,6 +1,7 @@
 import Restaurant from "../models/restaurantModel.js";
 import RestaurantUser from "../models/restaurantUserModel.js";
 import jwt from "jsonwebtoken";
+import { EMAIL_TEMPLATES, sendTemplateEmail } from "../utils/email.js";
 
 // Restaurant registration/onboarding
 export const registerRestaurant = async (req, res) => {
@@ -27,7 +28,7 @@ export const registerRestaurant = async (req, res) => {
     }
 
     // Clean up any existing restaurant users with this email
-    await RestaurantUser.deleteMany({ email });
+    // await RestaurantUser.deleteMany({ email });
 
     // Create restaurant
     const restaurant = await Restaurant.create({
@@ -49,44 +50,19 @@ export const registerRestaurant = async (req, res) => {
       isFirstLogin: false
     });
 
-    // Send data to Airtable for email automation
-    try {
-      const airtableData = {
-        "Restaurant Name": restaurant.name,
+    // 
+    const email_data = {
+        "Restaurant_Name": restaurant.name,
         "Email": restaurant.email,
         "Phone": restaurant.phone || '',
         "Address": restaurant.address || '',
         "Subdomain": restaurant.subdomain,
-        "Menu URL": `https://${restaurant.subdomain}.chopie-resturant-frontend.vercel.app`,
-        "Dashboard URL": `${process.env.PROD_FRONTEND_URL}/restaurant/login`
-      };
-      
+        "Menu_URL": `https://${restaurant.subdomain}.chopie-resturant-frontend.vercel.app`,
+        "Dashboard_URL": `${process.env.FRONTEND_URL}/restaurant/login`
+      };  
 
-      const airtableUrl = `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/Restaurants`;
-      
-      const response = await fetch(airtableUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.AIRTABLE_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          records: [{ fields: airtableData }]
-        })
-      });
-      
-      const responseData = await response.json();
-     
-      
-      if (response.ok) {
-        console.log('✅ Restaurant data sent to Airtable successfully');
-      } else {
-        console.error('❌ Airtable API error:', responseData);
-      }
-    } catch (airtableError) {
-      console.error('Failed to send to Airtable:', airtableError.message);
-      console.error('Full error:', airtableError);
-    }
+      sendTemplateEmail({ email: restaurant.email, name: restaurant.name},
+         EMAIL_TEMPLATES.WELCOME,  email_data )
 
     res.status(201).json({
       status: true,
