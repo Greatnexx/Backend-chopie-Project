@@ -6,7 +6,7 @@ import { EMAIL_TEMPLATES, sendTemplateEmail } from "../utils/email.js";
 // Restaurant registration/onboarding
 export const registerRestaurant = async (req, res) => {
   try {
-    const { name, email, phone, address, subdomain, ownerName, password } = req.body;
+    const { name, email, phone, address, ownerName, password } = req.body;
 
     if (!password || password.length < 6) {
       return res.status(400).json({
@@ -15,16 +15,22 @@ export const registerRestaurant = async (req, res) => {
       });
     }
 
-    // Check if subdomain is available
-    const existingRestaurant = await Restaurant.findOne({ 
-      $or: [{ email }, { subdomain: subdomain.toLowerCase() }] 
-    });
-    
-    if (existingRestaurant) {
+    // Check if email already registered
+    const existingEmail = await Restaurant.findOne({ email });
+    if (existingEmail) {
       return res.status(400).json({
         status: false,
-        message: existingRestaurant.email === email ? "Email already registered" : "Subdomain not available"
+        message: "Email already registered"
       });
+    }
+
+    // Auto-generate unique subdomain from restaurant name
+    const baseSubdomain = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    let subdomain = baseSubdomain;
+    let counter = 1;
+    while (await Restaurant.findOne({ subdomain })) {
+      subdomain = `${baseSubdomain}${counter}`;
+      counter++;
     }
 
     // Clean up any existing restaurant users with this email
@@ -50,19 +56,15 @@ export const registerRestaurant = async (req, res) => {
       isFirstLogin: false
     });
 
-    // 
-    const email_data = {
-        "Restaurant_Name": restaurant.name,
-        "Email": restaurant.email,
-        "Phone": restaurant.phone || '',
-        "Address": restaurant.address || '',
-        "Subdomain": restaurant.subdomain,
-        "Menu_URL": `https://${restaurant.subdomain}.chopie-resturant-frontend.vercel.app`,
-        "Dashboard_URL": `${process.env.FRONTEND_URL}/restaurant/login`
-      };  
-
-      sendTemplateEmail({ email: restaurant.email, name: restaurant.name},
-         EMAIL_TEMPLATES.WELCOME,  email_data )
+    sendTemplateEmail(
+      { email: restaurant.email, name: restaurant.name },
+      EMAIL_TEMPLATES.PENDING_REVIEW,
+      {
+        Resturant_Name: restaurant.name,
+        Email: restaurant.email,
+        Owner_Name: ownerName || name,
+      }
+    );
 
     res.status(201).json({
       status: true,

@@ -4,6 +4,7 @@ import RestaurantUser from "../models/restaurantUserModel.js";
 import Order from "../models/orderModel.js";
 import AuditLog from "../models/auditLogModel.js";
 import generateToken from "../utils/generateToken.js";
+import { EMAIL_TEMPLATES, sendTemplateEmail } from "../utils/email.js";
 
 // Platform Owner Login
 export const loginPlatformOwner = async (req, res) => {
@@ -156,6 +157,45 @@ export const getAllRestaurantsDetailed = async (req, res) => {
       status: false,
       message: error.message,
     });
+  }
+};
+
+// Approve Restaurant
+export const approveRestaurant = async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+
+    const restaurant = await Restaurant.findByIdAndUpdate(
+      restaurantId,
+      { isApproved: true, isActive: true },
+      { new: true }
+    );
+
+    if (!restaurant) {
+      return res.status(404).json({ status: false, message: "Restaurant not found" });
+    }
+
+    sendTemplateEmail(
+      { email: restaurant.email, name: restaurant.name },
+      EMAIL_TEMPLATES.WELCOME,
+      {
+        Resturant_Name: restaurant.name,
+        Email: restaurant.email,
+        Phone: restaurant.phone || '',
+        Address: restaurant.address || '',
+        Subdomain: restaurant.subdomain || '',
+        Menu_URL: `https://${restaurant.subdomain}.chopie.ng`,
+        Dashboard_URL: `https://chopie.ng/restaurant/login`
+      }
+    );
+
+    res.json({
+      status: true,
+      message: `${restaurant.name} has been approved successfully`,
+      data: restaurant
+    });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
   }
 };
 
