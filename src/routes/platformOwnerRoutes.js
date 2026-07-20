@@ -5,6 +5,7 @@ import {
   getAllRestaurantsDetailed,
   getRestaurantDetails,
   updateRestaurantStatus,
+  approveRestaurant,
   getPerformanceMetrics,
   getSystemHealth,
   getActivityFeed,
@@ -24,6 +25,7 @@ router.get('/analytics', protectPlatformOwner, getPlatformAnalytics);
 router.get('/restaurants', protectPlatformOwner, getAllRestaurantsDetailed);
 router.get('/restaurants/:restaurantId', protectPlatformOwner, getRestaurantDetails);
 router.put('/restaurants/:restaurantId/status', protectPlatformOwner, updateRestaurantStatus);
+router.put('/restaurants/:restaurantId/approve', protectPlatformOwner, approveRestaurant);
 router.get('/performance', protectPlatformOwner, getPerformanceMetrics);
 router.get('/system-health', protectPlatformOwner, getSystemHealth);
 router.get('/activity-feed', protectPlatformOwner, getActivityFeed);

@@ -33,11 +33,9 @@ connectDB();
 
 // Define allowed origins for both Express and Socket.IO
 const allowedOrigins = (origin, callback) => {
-  // Allow all localhost subdomains in development
   if (!origin || origin.includes('localhost') || origin.includes('127.0.0.1')) {
     return callback(null, true);
   }
-  // Allow production origins
   const productionOrigins = [
     process.env.FRONTEND_URL,
     process.env.PROD_FRONTEND_URL,
@@ -45,7 +43,9 @@ const allowedOrigins = (origin, callback) => {
 
   if (
     productionOrigins.includes(origin) ||
-    /^https:\/\/[a-zA-Z0-9-]+\.chopie-resturant-frontend\.vercel\.app$/.test(origin)
+    /^https:\/\/[a-zA-Z0-9-]+\.chopie-resturant-frontend\.vercel\.app$/.test(origin) ||
+    /^https:\/\/[a-zA-Z0-9-]+\.chopie\.ng$/.test(origin) ||
+    origin === 'https://chopie.ng'
   ) {
     return callback(null, true);
   }

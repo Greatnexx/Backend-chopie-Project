@@ -36,9 +36,10 @@ export async function sendTemplateEmail(
   } catch (err) {
     console.error("Unable to send template email", err);
   }
-}
+}1
 
 export const EMAIL_TEMPLATES = {
   PASSWORD_RESET: 'password-reset',
-  WELCOME: 'welcome'
+  WELCOME: 'welcome',
+  PENDING_REVIEW: 'pending-review'
 };

@@ -23,11 +23,18 @@ export const loginRestaurantUser = async (req, res) => {
     const { email, password } = req.body;
     const ipAddress = req.ip;
 
-    const user = await RestaurantUser.findOne({ email, isActive: true }).populate('restaurantId', 'name');
+    const user = await RestaurantUser.findOne({ email, isActive: true }).populate('restaurantId', 'name isApproved');
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({
         status: false,
         message: "Invalid credentials",
+      });
+    }
+
+    if (!user.restaurantId?.isApproved) {
+      return res.status(403).json({
+        status: false,
+        message: "Your restaurant is pending approval. You will be notified once approved.",
       });
     }
 
