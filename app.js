@@ -44,7 +44,7 @@ const allowedOrigins = (origin, callback) => {
   if (
     productionOrigins.includes(origin) ||
     /^https:\/\/[a-zA-Z0-9-]+\.chopie-resturant-frontend\.vercel\.app$/.test(origin) ||
-    /^https:\/\/[a-zA-Z0-9-]+\.chopie\.ng$/.test(origin) ||
+    /^https:\/\/([a-zA-Z0-9-]+\.)+chopie\.ng$/.test(origin) ||
     origin === 'https://chopie.ng'
   ) {
     return callback(null, true);
