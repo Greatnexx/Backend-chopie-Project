@@ -29,7 +29,7 @@ const restaurantUserSchema = new mongoose.Schema(
     },
     isActive: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     assignedOrders: [{
       type: mongoose.Schema.Types.ObjectId,

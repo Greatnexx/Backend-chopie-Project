@@ -190,8 +190,14 @@ export const approveRestaurant = async (req, res) => {
       });
     }
 
+    const restaurant = await Restaurant.findByIdAndUpdate(
+      restaurantId,
+      { isApproved: true, isActive: true },
+      { new: true }
+    );
+
     const dnsPayload = {
-      name: `${existingRestaurant.subdomain}.chopie.ng`,
+      name: `${restaurant.subdomain}.chopie.ng`,
       ttl: 3600,
       type: "CNAME",
       comment: "Domain verification record",
@@ -208,12 +214,6 @@ export const approveRestaurant = async (req, res) => {
           Authorization: `Bearer ${cloudflareToken}`
         }
       }
-    );
-
-    const restaurant = await Restaurant.findByIdAndUpdate(
-      restaurantId,
-      { isApproved: true, isActive: true },
-      { new: true }
     );
 
     sendTemplateEmail(

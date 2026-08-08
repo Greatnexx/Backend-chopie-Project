@@ -36,14 +36,15 @@ export const registerRestaurant = async (req, res) => {
     // Clean up any existing restaurant users with this email
     // await RestaurantUser.deleteMany({ email });
 
-    // Create restaurant
+    // Create restaurant in pending approval state
     const restaurant = await Restaurant.create({
       name,
       email,
       phone,
       address,
       subdomain: subdomain.toLowerCase(),
-      isActive: true
+      isActive: false,
+      isApproved: false
     });
 
     // Create default admin user
