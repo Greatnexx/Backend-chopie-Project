@@ -9,7 +9,8 @@ export const tenantMiddleware = async (req, res, next) => {
       const subdomain = req.headers['x-tenant-subdomain'];
       const restaurant = await Restaurant.findOne({ 
         subdomain: subdomain.toLowerCase(),
-        isActive: true 
+        isActive: true,
+        isApproved: true
       });
       if (restaurant) {
         restaurantId = restaurant._id;
@@ -25,7 +26,8 @@ export const tenantMiddleware = async (req, res, next) => {
         if (subdomain && !knownBackendHosts.includes(subdomain)) {
           const restaurant = await Restaurant.findOne({ 
             subdomain: subdomain.toLowerCase(),
-            isActive: true 
+            isActive: true,
+            isApproved: true
           });
           if (restaurant) {
             restaurantId = restaurant._id;
@@ -41,7 +43,8 @@ export const tenantMiddleware = async (req, res, next) => {
         const subdomain = pathMatch[1];
         const restaurant = await Restaurant.findOne({ 
           subdomain: subdomain.toLowerCase(),
-          isActive: true 
+          isActive: true,
+          isApproved: true
         });
         if (restaurant) {
           restaurantId = restaurant._id;
@@ -65,10 +68,11 @@ export const tenantMiddleware = async (req, res, next) => {
     }
 
     if (restaurantId) {
-      // Verify restaurant exists and is active
+      // Verify restaurant exists and is active and approved
       const restaurant = await Restaurant.findOne({
         _id: restaurantId,
-        isActive: true
+        isActive: true,
+        isApproved: true
       });
 
       if (restaurant) {
