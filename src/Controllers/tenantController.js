@@ -93,7 +93,8 @@ export const getRestaurantBySubdomain = async (req, res) => {
     
     const restaurant = await Restaurant.findOne({ 
       subdomain: subdomain.toLowerCase(),
-      isActive: true 
+      isActive: true,
+      isApproved: true
     });
 
     if (!restaurant) {

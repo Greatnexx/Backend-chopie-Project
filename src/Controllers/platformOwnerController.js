@@ -1,3 +1,4 @@
+import axios from "axios";
 import PlatformOwner from "../models/platformOwnerModel.js";
 import Restaurant from "../models/restaurantModel.js";
 import RestaurantUser from "../models/restaurantUserModel.js";
@@ -165,15 +166,55 @@ export const approveRestaurant = async (req, res) => {
   try {
     const { restaurantId } = req.params;
 
+    const existingRestaurant = await Restaurant.findById(restaurantId);
+
+    if (!existingRestaurant) {
+      return res.status(404).json({ status: false, message: "Restaurant approval request not found" });
+    }
+
+    if (existingRestaurant.isApproved) {
+      return res.status(400).json({
+        status: false,
+        message: "Restaurant is already approved"
+      });
+    }
+
+    const zoneId = process.env.CLOUDFLARE_ZONE_ID;
+    const cloudflareToken = process.env.CLOUDFLARE_API_TOKEN;
+    const vercelDnsTarget = process.env.VERCEL_DNS_TARGET || "chopie.ng";
+
+    if (!zoneId || !cloudflareToken) {
+      return res.status(500).json({
+        status: false,
+        message: "Cloudflare DNS configuration is missing"
+      });
+    }
+
+    const dnsPayload = {
+      name: `${existingRestaurant.subdomain}.chopie.ng`,
+      ttl: 3600,
+      type: "CNAME",
+      comment: "Domain verification record",
+      content: vercelDnsTarget,
+      proxied: false
+    };
+
+    await axios.post(
+      `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
+      dnsPayload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${cloudflareToken}`
+        }
+      }
+    );
+
     const restaurant = await Restaurant.findByIdAndUpdate(
       restaurantId,
       { isApproved: true, isActive: true },
       { new: true }
     );
-
-    if (!restaurant) {
-      return res.status(404).json({ status: false, message: "Restaurant not found" });
-    }
 
     sendTemplateEmail(
       { email: restaurant.email, name: restaurant.name },
@@ -184,7 +225,7 @@ export const approveRestaurant = async (req, res) => {
         Phone: restaurant.phone || '',
         Address: restaurant.address || '',
         Subdomain: restaurant.subdomain || '',
-        Menu_URL: `https://${restaurant.subdomain}.chopie.ng`,
+        Menu_URL: `https://${restaurant.subdomain}.app.chopie.ng`,
         Dashboard_URL: `https://chopie.ng/restaurant/login`
       }
     );
