@@ -26,13 +26,15 @@ export const registerRestaurant = async (req, res) => {
       });
     }
 
-    // Create restaurant
+    // Create restaurant in pending approval state
     const restaurant = await Restaurant.create({
       name,
       email,
       phone,
       address,
       subdomain: subdomain.toLowerCase(),
+      isActive: false,
+      isApproved: false
     });
 
     // Create default super admin user

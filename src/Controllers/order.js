@@ -6,14 +6,10 @@ import { io } from "../../app.js";
 
 export const createOrder = async (req, res) => {
   try {
-    const { tableNumber, customerName, customerPhone, items, totalAmount, paymentMethod, confirmDuplicate } = req.body;
+    const { tableNumber, customerName, customerPhone, items, totalAmount, confirmDuplicate } = req.body;
     // Basic validation
-    if (!tableNumber || !customerName || !items || !totalAmount || !paymentMethod) {
+    if (!tableNumber || !customerName || !items || !totalAmount) {
       return res.status(400).json({ status: false, message: "Missing required fields" });
-    }
-
-    if (!['cash', 'transfer'].includes(paymentMethod)) {
-      return res.status(400).json({ status: false, message: "Invalid payment method" });
     }
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -65,12 +61,12 @@ export const createOrder = async (req, res) => {
       customerPhone,
       items,
       totalAmount,
-      paymentMethod,
     };
     
     // Auto-accept staff orders
     if (req.body.orderSource === 'staff' && req.body.createdBy) {
       orderData.status = 'accepted';
+      orderData.orderStatus = 'accepted';
       orderData.assignedTo = req.body.createdBy;
     }
     
@@ -84,7 +80,6 @@ export const createOrder = async (req, res) => {
       customerPhone,
       items,
       totalAmount,
-      paymentMethod,
       status: 'pending',
       createdAt: order.createdAt || new Date()
     });
@@ -99,8 +94,7 @@ export const createOrder = async (req, res) => {
         customerPhone,
         items,
         totalAmount,
-        paymentMethod,
-        orderTime: order.createdAt || order.createdAt || new Date(),
+        orderTime: order.createdAt || new Date(),
         estimatedTime: "5-10 minutes",
         _id: order._id,
         createdAt: order.createdAt || new Date()
@@ -186,7 +180,7 @@ export const acceptOrder = async (req, res) => {
 
     const updatedOrder = await Order.findByIdAndUpdate(
       orderId,
-      { status: "accepted", assignedTo: userId },
+      { status: "accepted", orderStatus: "accepted", assignedTo: userId },
       { new: true }
     ).populate("assignedTo", "name email");
 
@@ -228,8 +222,7 @@ export const rejectOrder = async (req, res) => {
       return res.status(400).json({ status: false, message: "Order no longer available" });
     }
 
-    // Update order status to cancelled
-    await Order.findByIdAndUpdate(orderId, { status: "cancelled" });
+    await Order.findByIdAndUpdate(orderId, { status: "cancelled", orderStatus: "cancelled" });
 
     // Record rejection
     await RejectedOrder.create({ userId, orderId });
@@ -332,11 +325,10 @@ export const cancelOrder = async (req, res) => {
       return res.status(404).json({ status: false, message: "Order not found" });
     }
 
-    // Only allow cancellation if order is not completed
-    if (order.status === 'completed') {
+    if (['served', 'completed'].includes(order.orderStatus || order.status)) {
       return res.status(400).json({ 
         status: false, 
-        message: "Cannot cancel completed order" 
+        message: "Cannot cancel a served order" 
       });
     }
 
@@ -344,6 +336,7 @@ export const cancelOrder = async (req, res) => {
       orderId,
       { 
         status: "cancelled",
+        orderStatus: "cancelled",
         cancellationReason: reason,
         cancelledBy: userId,
         cancelledAt: new Date()
@@ -394,31 +387,30 @@ export const updateOrderStatus = async (req, res) => {
 
     const statusFlow = {
       accepted: "Preparing",
-      Preparing: "completed",
+      Preparing: "served",
     };
 
-    const nextStatus = statusFlow[order.status];
-    if (!nextStatus) {
+    const nextOrderStatus = statusFlow[order.orderStatus || order.status];
+    if (!nextOrderStatus) {
       return res.status(400).json({ status: false, message: "Cannot update status" });
     }
 
     const updatedOrder = await Order.findByIdAndUpdate(
       orderId,
-      { status: nextStatus },
+      { orderStatus: nextOrderStatus, status: nextOrderStatus === 'served' ? 'completed' : nextOrderStatus },
       { new: true }
     );
 
-    // Log status update (no email needed)
     await AuditLog.create({
       restaurantId: req.restaurantId || req.user.restaurantId,
       userId,
       orderId,
       action: "UPDATE_STATUS",
-      details: `Updated order ${order.orderNumber} to ${nextStatus}`,
+      details: `Updated order ${order.orderNumber} to ${nextOrderStatus}`,
       ipAddress,
     });
 
-    io.emit('orderStatusUpdated', { orderId, status: nextStatus });
+    io.emit('orderStatusUpdated', { orderId, orderStatus: nextOrderStatus });
 
     res.json({ status: true, data: updatedOrder });
   } catch (error) {
@@ -806,10 +798,9 @@ export const getDailyPaymentSummary = async (req, res) => {
     const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
     const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
 
-    // Build match query with tenant filtering
     const matchQuery = {
       createdAt: { $gte: startOfDay, $lte: endOfDay },
-      status: { $ne: "cancelled" }
+      paymentStatus: "paid"
     };
     
     if (req.restaurantId) {
@@ -817,9 +808,7 @@ export const getDailyPaymentSummary = async (req, res) => {
     }
 
     const summary = await Order.aggregate([
-      {
-        $match: matchQuery
-      },
+      { $match: matchQuery },
       {
         $group: {
           _id: "$paymentMethod",
@@ -852,6 +841,47 @@ export const getDailyPaymentSummary = async (req, res) => {
       message: "Failed to fetch payment summary",
       error: error.message,
     });
+  }
+};
+
+export const updatePaymentStatus = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { paymentStatus, cash = 0, transfer = 0 } = req.body;
+    const userId = req.user._id;
+    const ipAddress = req.ip;
+
+    if (!['unpaid', 'partial', 'paid'].includes(paymentStatus)) {
+      return res.status(400).json({ status: false, message: "Invalid payment status" });
+    }
+
+    const query = { _id: orderId };
+    if (req.restaurantId) query.restaurantId = req.restaurantId;
+
+    const order = await Order.findOne(query);
+    if (!order) return res.status(404).json({ status: false, message: "Order not found" });
+
+    const updateData = { paymentStatus };
+    if (paymentStatus === 'partial' || paymentStatus === 'paid') {
+      updateData.splitPayment = { cash: Number(cash), transfer: Number(transfer) };
+    }
+
+    const updatedOrder = await Order.findByIdAndUpdate(orderId, updateData, { new: true });
+
+    await AuditLog.create({
+      restaurantId: req.restaurantId || req.user.restaurantId,
+      userId,
+      orderId,
+      action: "UPDATE_PAYMENT_STATUS",
+      details: `Updated payment for order ${order.orderNumber} to ${paymentStatus}. Cash: ${cash}, Transfer: ${transfer}`,
+      ipAddress,
+    });
+
+    io.emit('paymentStatusUpdated', { orderId, paymentStatus });
+
+    res.json({ status: true, data: updatedOrder });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
   }
 };
 

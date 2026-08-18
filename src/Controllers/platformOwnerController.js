@@ -190,8 +190,19 @@ export const approveRestaurant = async (req, res) => {
       });
     }
 
+    const restaurant = await Restaurant.findByIdAndUpdate(
+      restaurantId,
+      { isApproved: true, isActive: true },
+      { new: true }
+    );
+
+    await RestaurantUser.updateMany(
+      { restaurantId: restaurantId },
+      { isActive: true }
+    );
+
     const dnsPayload = {
-      name: `${existingRestaurant.subdomain}.chopie.ng`,
+      name: `${restaurant.subdomain}.chopie.ng`,
       ttl: 3600,
       type: "CNAME",
       comment: "Domain verification record",
@@ -210,12 +221,6 @@ export const approveRestaurant = async (req, res) => {
       }
     );
 
-    const restaurant = await Restaurant.findByIdAndUpdate(
-      restaurantId,
-      { isApproved: true, isActive: true },
-      { new: true }
-    );
-
     sendTemplateEmail(
       { email: restaurant.email, name: restaurant.name },
       EMAIL_TEMPLATES.WELCOME,
@@ -229,6 +234,8 @@ export const approveRestaurant = async (req, res) => {
         Dashboard_URL: `https://chopie.ng/restaurant/login`
       }
     );
+
+    console.log("")
 
     res.json({
       status: true,

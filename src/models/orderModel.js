@@ -68,12 +68,26 @@ const orderSchema = new mongoose.Schema(
     paymentMethod: {
       type: String,
       enum: ["cash", "transfer"],
-      required: true,
+      default: null,
     },
     status: {
       type: String,
       enum: ["pending", "accepted", "Preparing", "completed", "cancelled"],
       default: "pending",
+    },
+    orderStatus: {
+      type: String,
+      enum: ["pending", "accepted", "Preparing", "served", "cancelled"],
+      default: "pending",
+    },
+    paymentStatus: {
+      type: String,
+      enum: ["unpaid", "partial", "paid"],
+      default: "unpaid",
+    },
+    splitPayment: {
+      cash: { type: Number, default: 0 },
+      transfer: { type: Number, default: 0 },
     },
     assignedTo: {
       type: mongoose.Schema.Types.ObjectId,

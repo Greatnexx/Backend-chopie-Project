@@ -1,5 +1,5 @@
 import express from 'express';
-import { createOrder, deleteOrder, getAllOrders, getOrderById, trackOrder, searchOrder, getDailyPaymentSummary, updateOrder as modifyOrder, cancelOrder } from '../Controllers/order.js';
+import { createOrder, deleteOrder, getAllOrders, getOrderById, trackOrder, searchOrder, getDailyPaymentSummary, updateOrder as modifyOrder, cancelOrder, updatePaymentStatus } from '../Controllers/order.js';
 import { tenantMiddleware, requireTenant } from '../middlewares/tenantMiddleware.js';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
 import { protect as restaurantProtect } from '../middlewares/restaurantAuth.js';
@@ -81,6 +81,7 @@ router.get('/order/payment-summary', authenticateToken, tenantMiddleware, getDai
 router.get('/order/:orderId', authenticateToken, tenantMiddleware, getOrderById);
 router.put('/order/:orderId', authenticateToken, tenantMiddleware, modifyOrder);
 router.post('/order/:orderId/cancel', authenticateToken, tenantMiddleware, cancelOrder);
+router.patch('/order/:orderId/payment', authenticateToken, tenantMiddleware, updatePaymentStatus);
 router.delete('/order/:orderId', authenticateToken, tenantMiddleware, deleteOrder);
 router.patch("/order/:orderNumber", authenticateToken, tenantMiddleware, updateOrder);
 

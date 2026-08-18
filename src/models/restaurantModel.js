@@ -29,7 +29,7 @@ const restaurantSchema = new mongoose.Schema(
     },
     isActive: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     isApproved: {
       type: Boolean,
@@ -95,37 +95,44 @@ const restaurantSchema = new mongoose.Schema(
       monday: {
         open: { type: String, default: '09:00' },
         close: { type: String, default: '22:00' },
-        closed: { type: Boolean, default: false }
+        closed: { type: Boolean, default: false },
+        is24Hours: { type: Boolean, default: false }
       },
       tuesday: {
         open: { type: String, default: '09:00' },
         close: { type: String, default: '22:00' },
-        closed: { type: Boolean, default: false }
+        closed: { type: Boolean, default: false },
+        is24Hours: { type: Boolean, default: false }
       },
       wednesday: {
         open: { type: String, default: '09:00' },
         close: { type: String, default: '22:00' },
-        closed: { type: Boolean, default: false }
+        closed: { type: Boolean, default: false },
+        is24Hours: { type: Boolean, default: false }
       },
       thursday: {
         open: { type: String, default: '09:00' },
         close: { type: String, default: '22:00' },
-        closed: { type: Boolean, default: false }
+        closed: { type: Boolean, default: false },
+        is24Hours: { type: Boolean, default: false }
       },
       friday: {
         open: { type: String, default: '09:00' },
         close: { type: String, default: '23:00' },
-        closed: { type: Boolean, default: false }
+        closed: { type: Boolean, default: false },
+        is24Hours: { type: Boolean, default: false }
       },
       saturday: {
         open: { type: String, default: '09:00' },
         close: { type: String, default: '23:00' },
-        closed: { type: Boolean, default: false }
+        closed: { type: Boolean, default: false },
+        is24Hours: { type: Boolean, default: false }
       },
       sunday: {
         open: { type: String, default: '10:00' },
         close: { type: String, default: '21:00' },
-        closed: { type: Boolean, default: false }
+        closed: { type: Boolean, default: false },
+        is24Hours: { type: Boolean, default: false }
       }
     },
     contactInfo: {
