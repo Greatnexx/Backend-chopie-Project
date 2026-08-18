@@ -22,19 +22,42 @@ export const loginRestaurantUser = async (req, res) => {
   try {
     const { email, password } = req.body;
     const ipAddress = req.ip;
+    const normalizedEmail = String(email || '').trim().toLowerCase();
 
-    const user = await RestaurantUser.findOne({ email, isActive: true }).populate('restaurantId', 'name isApproved');
-    if (!user || !(await user.comparePassword(password))) {
+    const user = await RestaurantUser.findOne({ email: normalizedEmail }).populate('restaurantId', 'name isApproved isActive');
+    if (!user) {
       return res.status(401).json({
         status: false,
         message: "Invalid credentials",
       });
     }
 
-    if (!user.restaurantId?.isApproved) {
+    if (!(await user.comparePassword(password))) {
+      return res.status(401).json({
+        status: false,
+        message: "Invalid credentials",
+      });
+    }
+
+    // Restaurant document missing (orphaned user)
+    if (!user.restaurantId) {
+      return res.status(401).json({
+        status: false,
+        message: "Invalid credentials",
+      });
+    }
+
+    if (!user.restaurantId.isApproved || !user.restaurantId.isActive) {
       return res.status(403).json({
         status: false,
-        message: "Your restaurant is pending approval. You will be notified once approved.",
+        message: "Your business is pending approval. You will be notified once approved.",
+      });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({
+        status: false,
+        message: "Your account has been deactivated.",
       });
     }
 
@@ -268,27 +291,74 @@ export const getAnalytics = async (req, res) => {
     }
     
     const orders = await Order.find(query);
-    const completedOrders = orders.filter(o => o.status === "completed");
+    const paidOrders = orders.filter(o => o.paymentStatus === "paid");
+    const completedOrders = orders.filter(o => ['served', 'completed'].includes(o.orderStatus || o.status));
 
-    // Only count revenue from completed orders
-    const totalRevenue = completedOrders.reduce((sum, order) => sum + order.totalAmount, 0);
-    const avgOrderTime = 25; // minutes - you can calculate this based on timestamps
+    // Only count revenue from paid orders
+    const totalRevenue = paidOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+    const avgOrderTime = 25;
     
     const delayedOrders = orders.filter(o => {
       const timeDiff = (new Date() - new Date(o.createdAt)) / (1000 * 60);
-      return timeDiff > 30 && o.status !== "completed";
+      return timeDiff > 30 && !['served', 'completed', 'cancelled'].includes(o.orderStatus || o.status);
     });
     
-    const fastOrders = completedOrders.filter(o => {
+    const fastOrders = paidOrders.filter(o => {
       const timeDiff = (new Date(o.updatedAt) - new Date(o.createdAt)) / (1000 * 60);
       return timeDiff < 20;
     });
 
-    // Payment method analytics - only from completed orders
-    const cashOrders = completedOrders.filter(o => o.paymentMethod === "cash");
-    const transferOrders = completedOrders.filter(o => o.paymentMethod === "transfer");
-    const cashRevenue = cashOrders.reduce((sum, order) => sum + order.totalAmount, 0);
-    const transferRevenue = transferOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+    // Payment method analytics - sum actual splitPayment amounts from paid orders
+    const cashRevenue = paidOrders.reduce((sum, o) => sum + (o.splitPayment?.cash || 0), 0);
+    const transferRevenue = paidOrders.reduce((sum, o) => sum + (o.splitPayment?.transfer || 0), 0);
+
+    // Daily report extras
+    let dailyReport = null;
+    if (period === 'day' && !startParam) {
+      // Top selling items by quantity across all orders
+      const itemMap = {};
+      orders.forEach(o => {
+        o.items.forEach(item => {
+          if (!itemMap[item.name]) itemMap[item.name] = { name: item.name, quantity: 0, revenue: 0 };
+          itemMap[item.name].quantity += item.quantity;
+          itemMap[item.name].revenue += item.totalPrice;
+        });
+      });
+      const topItems = Object.values(itemMap).sort((a, b) => b.quantity - a.quantity).slice(0, 5);
+
+      // Hourly breakdown from paid orders
+      const hourlyMap = {};
+      paidOrders.forEach(o => {
+        const hour = new Date(o.createdAt).getHours();
+        if (!hourlyMap[hour]) hourlyMap[hour] = { hour, orders: 0, revenue: 0 };
+        hourlyMap[hour].orders += 1;
+        hourlyMap[hour].revenue += o.totalAmount;
+      });
+      const hourlyBreakdown = Array.from({ length: 24 }, (_, h) => hourlyMap[h] || { hour: h, orders: 0, revenue: 0 });
+      const peakHour = hourlyBreakdown.reduce((max, h) => h.orders > max.orders ? h : max, { hour: 0, orders: 0, revenue: 0 });
+
+      // Outstanding payments
+      const unpaidOrders = orders.filter(o => o.paymentStatus === 'unpaid');
+      const partialOrders = orders.filter(o => o.paymentStatus === 'partial');
+      const unpaidAmount = unpaidOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+      const partialAmount = partialOrders.reduce((sum, o) => {
+        const collected = (o.splitPayment?.cash || 0) + (o.splitPayment?.transfer || 0);
+        return sum + (o.totalAmount - collected);
+      }, 0);
+
+      dailyReport = {
+        topItems,
+        peakHour: peakHour.orders > 0 ? peakHour : null,
+        hourlyBreakdown,
+        outstanding: {
+          unpaidCount: unpaidOrders.length,
+          unpaidAmount,
+          partialCount: partialOrders.length,
+          partialAmount,
+          totalOutstanding: unpaidAmount + partialAmount
+        }
+      };
+    }
 
     res.json({
       status: true,
@@ -296,20 +366,22 @@ export const getAnalytics = async (req, res) => {
         totalRevenue: totalRevenue || 0,
         totalOrders: orders?.length || 0,
         completedOrders: completedOrders?.length || 0,
+        paidOrders: paidOrders?.length || 0,
         delayedOrders: delayedOrders?.length || 0,
         fastOrders: fastOrders?.length || 0,
         avgOrderTime: avgOrderTime || 0,
         period: period || 'day',
         paymentMethods: {
           cash: {
-            count: cashOrders.length,
+            count: paidOrders.filter(o => (o.splitPayment?.cash || 0) > 0).length,
             revenue: cashRevenue
           },
           transfer: {
-            count: transferOrders.length,
+            count: paidOrders.filter(o => (o.splitPayment?.transfer || 0) > 0).length,
             revenue: transferRevenue
           }
-        }
+        },
+        ...(dailyReport && { dailyReport })
       }
     });
   } catch (error) {
@@ -542,7 +614,7 @@ export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
-    const user = await RestaurantUser.findOne({ email: email.toLowerCase(), isActive: true });
+    const user = await RestaurantUser.findOne({ email: email.toLowerCase() });
     if (!user) {
       return res.status(404).json({ status: false, message: "No account found with that email" });
     }
@@ -554,9 +626,8 @@ export const forgotPassword = async (req, res) => {
 
     const resetUrl = `${process.env.FRONTEND_URL}/restaurant/reset-password/${resetToken}`;
 
-    
-  sendTemplateEmail({ email: user.email, name: user.name},
-   EMAIL_TEMPLATES.PASSWORD_RESET,  {name:user.name,resetUrl} )
+    sendTemplateEmail({ email: user.email, name: user.name},
+     EMAIL_TEMPLATES.PASSWORD_RESET, {name:user.name, resetUrl})
 
     res.json({ status: true, message: "Password reset link sent to your email" });
   } catch (error) {
@@ -662,4 +733,3 @@ export const deleteUser = async (req, res) => {
     res.status(500).json({ status: false, message: error.message });
   }
 };
-

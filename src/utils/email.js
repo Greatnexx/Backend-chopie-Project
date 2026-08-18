@@ -34,9 +34,11 @@ export async function sendTemplateEmail(
         }
     );
   } catch (err) {
-    console.error("Unable to send template email", err);
+    console.error('[Email] Failed to send to:', to.email);
+    console.error('[Email] Template:', templateAlias);
+    console.error('[Email] Error:', err.response?.data || err.message);
   }
-}1
+}
 
 export const EMAIL_TEMPLATES = {
   PASSWORD_RESET: 'password-reset',

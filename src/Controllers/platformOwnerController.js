@@ -196,6 +196,11 @@ export const approveRestaurant = async (req, res) => {
       { new: true }
     );
 
+    await RestaurantUser.updateMany(
+      { restaurantId: restaurantId },
+      { isActive: true }
+    );
+
     const dnsPayload = {
       name: `${restaurant.subdomain}.chopie.ng`,
       ttl: 3600,
@@ -229,6 +234,8 @@ export const approveRestaurant = async (req, res) => {
         Dashboard_URL: `https://chopie.ng/restaurant/login`
       }
     );
+
+    console.log("")
 
     res.json({
       status: true,

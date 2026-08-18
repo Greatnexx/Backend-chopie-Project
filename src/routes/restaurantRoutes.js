@@ -1,7 +1,7 @@
 import express from 'express';
 import { loginRestaurantUser, createRestaurantUser, getAllUsers, toggleUserStatus, awardStar, getAnalytics, getAuditLogs, searchOrders, changePassword, firstTimePasswordChange, getUserCredentials, resetUserPassword, toggleMenuAvailability, getAllMenuItems, deleteUser, forgotPassword, resetPassword } from '../Controllers/restaurantAuth.js';
 import { registerRestaurant } from '../Controllers/tenantController.js';
-import { acceptOrder, rejectOrder, updateOrderStatus, getAllOrders, getOrderById } from '../Controllers/order.js';
+import { acceptOrder, rejectOrder, updateOrderStatus, getAllOrders, getOrderById, updatePaymentStatus } from '../Controllers/order.js';
 import { createCategory, getCategories } from '../Controllers/category.js';
 import { protect, authorize, requirePasswordChange } from '../middlewares/restaurantAuth.js';
 import { tenantMiddleware } from '../middlewares/tenantMiddleware.js';
@@ -38,5 +38,6 @@ router.get('/orders/:orderId', protect, tenantMiddleware, requirePasswordChange,
 router.patch('/orders/:orderId/accept', protect, tenantMiddleware, requirePasswordChange, authorize('SuperAdmin', 'MenuManager'), acceptOrder);
 router.patch('/orders/:orderId/reject', protect, tenantMiddleware, requirePasswordChange, authorize('SuperAdmin', 'MenuManager'), rejectOrder);
 router.patch('/orders/:orderId/status', protect, tenantMiddleware, requirePasswordChange, authorize('SuperAdmin', 'MenuManager'), updateOrderStatus);
+router.patch('/orders/:orderId/payment', protect, tenantMiddleware, requirePasswordChange, authorize('SuperAdmin', 'MenuManager', 'TransactionAdmin'), updatePaymentStatus);
 
 export default router;
