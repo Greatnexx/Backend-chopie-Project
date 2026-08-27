@@ -8,7 +8,7 @@ export const createOrder = async (req, res) => {
   try {
     const { tableNumber, customerName, customerPhone, items, totalAmount, confirmDuplicate } = req.body;
     // Basic validation
-    if (!tableNumber || !customerName || !items || !totalAmount) {
+    if (!tableNumber || !customerName || !customerPhone || !items || !totalAmount) {
       return res.status(400).json({ status: false, message: "Missing required fields" });
     }
 
